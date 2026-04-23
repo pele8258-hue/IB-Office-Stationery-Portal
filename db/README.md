@@ -56,6 +56,12 @@ This allows one consistent approval and monitoring model for all request types.
 mysql -u <user> -p <database_name> < db/schema.sql
 ```
 
+If you already created the old schema and only need to align with the corrected requirements, run:
+
+```bash
+mysql -u <user> -p <database_name> < db/migrations/20260423_corrected-requirements.sql
+```
+
 ## Important Usage Notes
 
 1. Use `stock_item_units.units_per_this_unit` to convert request quantity into base unit.
