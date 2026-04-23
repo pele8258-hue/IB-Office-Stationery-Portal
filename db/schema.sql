@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS workflows (
   requester_user_id BIGINT UNSIGNED NOT NULL,
   requester_branch_id BIGINT UNSIGNED NOT NULL,
   requester_department_id BIGINT UNSIGNED NULL,
-  current_status ENUM('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'COMPLETED') NOT NULL DEFAULT 'PENDING',
+  current_status ENUM('PENDING', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
   submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   decided_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -200,8 +200,8 @@ CREATE TABLE IF NOT EXISTS workflow_approval_steps (
 CREATE TABLE IF NOT EXISTS workflow_status_logs (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   workflow_id BIGINT UNSIGNED NOT NULL,
-  from_status ENUM('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'COMPLETED') NULL,
-  to_status ENUM('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'COMPLETED') NOT NULL,
+  from_status ENUM('PENDING', 'APPROVED', 'REJECTED') NULL,
+  to_status ENUM('PENDING', 'APPROVED', 'REJECTED') NOT NULL,
   changed_by_user_id BIGINT UNSIGNED NULL,
   change_reason VARCHAR(500) NULL,
   changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -234,6 +234,7 @@ CREATE TABLE IF NOT EXISTS stationery_daily_request_items (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   daily_request_id BIGINT UNSIGNED NOT NULL,
   stock_item_id BIGINT UNSIGNED NOT NULL,
+  line_description VARCHAR(255) NULL,
   item_description_override VARCHAR(255) NULL,
   requested_quantity DECIMAL(18,4) NOT NULL,
   requested_unit_type_id TINYINT UNSIGNED NOT NULL,
@@ -263,6 +264,7 @@ CREATE TABLE IF NOT EXISTS stationery_monthly_requests (
   department_id BIGINT UNSIGNED NOT NULL,
   requester_name_snapshot VARCHAR(150) NOT NULL,
   contact_number VARCHAR(30) NOT NULL,
+  description_text VARCHAR(500) NULL,
   notes VARCHAR(500) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -277,6 +279,7 @@ CREATE TABLE IF NOT EXISTS stationery_monthly_request_items (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   monthly_request_id BIGINT UNSIGNED NOT NULL,
   stock_item_id BIGINT UNSIGNED NOT NULL,
+  line_description VARCHAR(255) NULL,
   requested_quantity DECIMAL(18,4) NOT NULL,
   requested_unit_type_id TINYINT UNSIGNED NOT NULL,
   conversion_factor_to_base DECIMAL(18,4) NOT NULL,
@@ -373,6 +376,22 @@ FROM workflows w
 JOIN users u ON u.id = w.requester_user_id
 JOIN branches b ON b.id = w.requester_branch_id
 LEFT JOIN departments d ON d.id = w.requester_department_id;
+
+CREATE OR REPLACE VIEW vw_stock_balance_by_branch AS
+SELECT
+  bis.id AS branch_item_stock_id,
+  bis.branch_id,
+  b.branch_name,
+  bis.stock_item_id,
+  si.item_code,
+  si.item_name,
+  si.barcode_number,
+  bis.quantity_base_units AS stock_balance_base_units,
+  bis.reorder_level_base_units,
+  bis.updated_at
+FROM branch_item_stock bis
+JOIN branches b ON b.id = bis.branch_id
+JOIN stock_items si ON si.id = bis.stock_item_id;
 
 INSERT INTO unit_types (unit_code, unit_name)
 VALUES

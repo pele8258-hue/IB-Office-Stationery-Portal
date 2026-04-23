@@ -48,6 +48,7 @@ This allows one consistent approval and monitoring model for all request types.
 ### 5) Request Monitoring
 
 - `vw_request_monitoring` combines common workflow fields with requester, branch, and department information.
+- `vw_stock_balance_by_branch` gives stock balance by branch and item.
 
 ## How to Run
 
@@ -59,5 +60,6 @@ mysql -u <user> -p <database_name> < db/schema.sql
 
 1. Use `stock_item_units.units_per_this_unit` to convert request quantity into base unit.
 2. Keep `branch_item_stock.quantity_base_units` as your source of truth for inventory.
-3. Update `workflows.current_status` for request state; insert every transition into `workflow_status_logs`.
+3. Use request statuses `PENDING`, `APPROVED`, `REJECTED`; insert every transition into `workflow_status_logs`.
 4. Insert per-approver decisions into `workflow_approval_steps` for full approval history.
+5. Monthly request supports header-level description (`stationery_monthly_requests.description_text`) and item-level quantity/unit (`stationery_monthly_request_items`).
