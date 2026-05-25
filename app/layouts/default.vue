@@ -4,8 +4,9 @@ import logoIB from '~/assets/images/logos/Logo ib band.png'
 const authStore = useAuthStore()
 const { logout } = useAuth()
 const router = useRouter()
+const { canView } = usePermissions()
 
-const openMenus = reactive({ stationary: true, inventory: true, userMgmt: true })
+const openMenus = reactive({ stationary: true, inventory: true, userMgmt: true, vehicles: true })
 const mobileOpen = ref(false)
 
 function closeMobile() { mobileOpen.value = false }
@@ -80,7 +81,7 @@ watch(() => router.currentRoute.value.path, closeMobile)
 
         <!-- Nav items -->
         <nav class="px-3 py-3 space-y-0.5">
-          <NuxtLink to="/dashboard" class="mob-item" @click="closeMobile">
+          <NuxtLink v-if="canView('DASHBOARD')" to="/dashboard" class="mob-item" @click="closeMobile">
             <span class="nav-icon" style="background:#DBEAFE;">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
                 <rect x="3" y="3" width="8" height="8" rx="1.5" fill="#3B82F6"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="#3B82F6"/>
@@ -90,66 +91,95 @@ watch(() => router.currentRoute.value.path, closeMobile)
             Dashboard
           </NuxtLink>
 
-          <button class="mob-item w-full" @click="openMenus.stationary = !openMenus.stationary">
-            <span class="nav-icon" style="background:#FFEDD5;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="2" fill="#F97316"/><line x1="8" y1="8" x2="16" y2="8" stroke="white" stroke-width="1.8" stroke-linecap="round"/><line x1="8" y1="12" x2="16" y2="12" stroke="white" stroke-width="1.8" stroke-linecap="round"/><line x1="8" y1="16" x2="12" y2="16" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
-            </span>
-            <span class="flex-1 text-left">Stationary Request</span>
-            <svg class="w-3 h-3 text-gray-300 transition-transform" :class="openMenus.stationary ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
-          </button>
-          <div v-if="openMenus.stationary" class="ml-3 pl-3 border-l border-gray-100 space-y-0.5">
-            <NuxtLink to="/stationary/daily" class="mob-sub-item" @click="closeMobile">
-              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#EAB308;"></span>
-              Daily Request
-            </NuxtLink>
-            <NuxtLink to="/stationary/monthly" class="mob-sub-item" @click="closeMobile">
-              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#10B981;"></span>
-              Monthly Request
-            </NuxtLink>
-          </div>
+          <template v-if="canView('STATIONARY')">
+            <button class="mob-item w-full" @click="openMenus.stationary = !openMenus.stationary">
+              <span class="nav-icon" style="background:#FFEDD5;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="2" fill="#F97316"/><line x1="8" y1="8" x2="16" y2="8" stroke="white" stroke-width="1.8" stroke-linecap="round"/><line x1="8" y1="12" x2="16" y2="12" stroke="white" stroke-width="1.8" stroke-linecap="round"/><line x1="8" y1="16" x2="12" y2="16" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
+              </span>
+              <span class="flex-1 text-left">Stationary Request</span>
+              <svg class="w-3 h-3 text-gray-300 transition-transform" :class="openMenus.stationary ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+            <div v-if="openMenus.stationary" class="ml-3 pl-3 border-l border-gray-100 space-y-0.5">
+              <NuxtLink to="/stationary/daily" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#EAB308;"></span>
+                Daily Request
+              </NuxtLink>
+              <NuxtLink to="/stationary/monthly" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#10B981;"></span>
+                Monthly Request
+              </NuxtLink>
+            </div>
+          </template>
 
-          <NuxtLink to="/bookings" class="mob-item" @click="closeMobile">
+          <NuxtLink v-if="canView('BOOKINGS')" to="/bookings" class="mob-item" @click="closeMobile">
             <span class="nav-icon" style="background:#DCFCE7;">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="1" y="9" width="22" height="10" rx="2" fill="#22C55E"/><circle cx="6.5" cy="19" r="2" fill="#166834"/><circle cx="17.5" cy="19" r="2" fill="#166834"/><line x1="1" y1="13" x2="23" y2="13" stroke="white" stroke-width="1.2"/></svg>
             </span>
             Transport Request
           </NuxtLink>
+          <template v-if="canView('VEHICLES')">
+            <button class="mob-item w-full" @click="openMenus.vehicles = !openMenus.vehicles">
+              <span class="nav-icon" style="background:#E0F2FE;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="1" y="9" width="22" height="10" rx="2" fill="#0EA5E9"/><circle cx="6.5" cy="19" r="2" fill="#0369A1"/><circle cx="17.5" cy="19" r="2" fill="#0369A1"/><path d="M1 13h22" stroke="white" stroke-width="1.2"/><path d="M5 9V7a2 2 0 012-2h10a2 2 0 012 2v2" stroke="#0EA5E9" stroke-width="1.5"/></svg>
+              </span>
+              <span class="flex-1 text-left">Vehicle Management</span>
+              <svg class="w-3 h-3 text-gray-300 transition-transform" :class="openMenus.vehicles ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+            <div v-if="openMenus.vehicles" class="ml-3 pl-3 border-l border-gray-100 space-y-0.5">
+              <NuxtLink to="/vehicles" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#0EA5E9;"></span>
+                Vehicle
+              </NuxtLink>
+              <NuxtLink to="/vehicles/documents" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#6366F1;"></span>
+                Document
+              </NuxtLink>
+            </div>
+          </template>
 
-          <button class="mob-item w-full" @click="openMenus.inventory = !openMenus.inventory">
-            <span class="nav-icon" style="background:#F3E8FF;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="18" rx="2" fill="#8B5CF6"/><line x1="2" y1="9" x2="22" y2="9" stroke="white" stroke-width="1.5"/><line x1="2" y1="15" x2="22" y2="15" stroke="white" stroke-width="1.5"/><line x1="8" y1="9" x2="8" y2="21" stroke="white" stroke-width="1.5"/></svg>
-            </span>
-            <span class="flex-1 text-left">Stationery Inventory</span>
-            <svg class="w-3 h-3 text-gray-300 transition-transform" :class="openMenus.inventory ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
-          </button>
-          <div class="submenu ml-3 pl-3 border-l border-gray-100" :class="{ 'submenu-open': openMenus.inventory }">
-            <NuxtLink to="/inventory/stock" class="mob-sub-item" @click="closeMobile">
-              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#14B8A6;"></span>
-              Stock Management
-            </NuxtLink>
-            <NuxtLink to="/inventory/categories" class="mob-sub-item" @click="closeMobile">
-              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#A855F7;"></span>
-              Item Category
-            </NuxtLink>
-          </div>
+          <template v-if="canView('INVENTORY')">
+            <button class="mob-item w-full" @click="openMenus.inventory = !openMenus.inventory">
+              <span class="nav-icon" style="background:#F3E8FF;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="18" rx="2" fill="#8B5CF6"/><line x1="2" y1="9" x2="22" y2="9" stroke="white" stroke-width="1.5"/><line x1="2" y1="15" x2="22" y2="15" stroke="white" stroke-width="1.5"/><line x1="8" y1="9" x2="8" y2="21" stroke="white" stroke-width="1.5"/></svg>
+              </span>
+              <span class="flex-1 text-left">Stationery Inventory</span>
+              <svg class="w-3 h-3 text-gray-300 transition-transform" :class="openMenus.inventory ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="submenu ml-3 pl-3 border-l border-gray-100" :class="{ 'submenu-open': openMenus.inventory }">
+              <NuxtLink to="/inventory/stock" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#14B8A6;"></span>
+                Stock Management
+              </NuxtLink>
+              <NuxtLink to="/inventory/categories" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#A855F7;"></span>
+                Item Category
+              </NuxtLink>
+            </div>
+          </template>
 
-          <button class="mob-item w-full" @click="openMenus.userMgmt = !openMenus.userMgmt">
-            <span class="nav-icon" style="background:#F3E8FF;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="4" fill="#7C3AED"/><path d="M1 21c0-4 3.6-7 8-7s8 3 8 7" fill="#7C3AED"/><circle cx="19" cy="8" r="3" fill="#A78BFA"/></svg>
-            </span>
-            <span class="flex-1 text-left">User Management</span>
-            <svg class="w-3 h-3 text-gray-300 transition-transform" :class="openMenus.userMgmt ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
-          </button>
-          <div class="submenu ml-3 pl-3 border-l border-gray-100" :class="{ 'submenu-open': openMenus.userMgmt }">
-            <NuxtLink to="/staff" class="mob-sub-item" @click="closeMobile">
-              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#7C3AED;"></span>
-              User List
-            </NuxtLink>
-            <NuxtLink to="/settings/branches" class="mob-sub-item" @click="closeMobile">
-              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#F97316;"></span>
-              Branch Management
-            </NuxtLink>
-          </div>
+          <template v-if="canView('STAFF') || canView('BRANCHES') || canView('ROLES')">
+            <button class="mob-item w-full" @click="openMenus.userMgmt = !openMenus.userMgmt">
+              <span class="nav-icon" style="background:#F3E8FF;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="4" fill="#7C3AED"/><path d="M1 21c0-4 3.6-7 8-7s8 3 8 7" fill="#7C3AED"/><circle cx="19" cy="8" r="3" fill="#A78BFA"/></svg>
+              </span>
+              <span class="flex-1 text-left">User Management</span>
+              <svg class="w-3 h-3 text-gray-300 transition-transform" :class="openMenus.userMgmt ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="submenu ml-3 pl-3 border-l border-gray-100" :class="{ 'submenu-open': openMenus.userMgmt }">
+              <NuxtLink v-if="canView('STAFF')" to="/staff" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#7C3AED;"></span>
+                User List
+              </NuxtLink>
+              <NuxtLink v-if="canView('BRANCHES')" to="/settings/branches" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#F97316;"></span>
+                Organization Setup
+              </NuxtLink>
+              <NuxtLink v-if="canView('ROLES')" to="/roles" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#6366F1;"></span>
+                Role Management
+              </NuxtLink>
+            </div>
+          </template>
         </nav>
       </div>
     </Transition>
@@ -164,11 +194,11 @@ watch(() => router.currentRoute.value.path, closeMobile)
         <span class="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">Navigation</span>
       </div>
       <nav class="flex-1 px-3 pb-4 space-y-0.5 text-sm overflow-y-auto">
-        <NuxtLink to="/dashboard" class="nav-item">
+        <NuxtLink v-if="canView('DASHBOARD')" to="/dashboard" class="nav-item">
           <span class="nav-icon" style="background:#DBEAFE;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="#3B82F6"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="#3B82F6"/><rect x="3" y="13" width="8" height="8" rx="1.5" fill="#3B82F6"/><rect x="13" y="13" width="8" height="8" rx="1.5" fill="#3B82F6"/></svg></span>
           Dashboard
         </NuxtLink>
-        <div>
+        <div v-if="canView('STATIONARY')">
           <button class="nav-item w-full" @click="openMenus.stationary = !openMenus.stationary">
             <span class="nav-icon" style="background:#FFEDD5;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="2" fill="#F97316"/><line x1="8" y1="8" x2="16" y2="8" stroke="white" stroke-width="1.8" stroke-linecap="round"/><line x1="8" y1="12" x2="16" y2="12" stroke="white" stroke-width="1.8" stroke-linecap="round"/><line x1="8" y1="16" x2="12" y2="16" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg></span>
             <span>Stationary Request</span>
@@ -185,11 +215,28 @@ watch(() => router.currentRoute.value.path, closeMobile)
             </NuxtLink>
           </div>
         </div>
-        <NuxtLink to="/bookings" class="nav-item">
+        <NuxtLink v-if="canView('BOOKINGS')" to="/bookings" class="nav-item">
           <span class="nav-icon" style="background:#DCFCE7;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="1" y="9" width="22" height="10" rx="2" fill="#22C55E"/><circle cx="6.5" cy="19" r="2" fill="#166834"/><circle cx="17.5" cy="19" r="2" fill="#166834"/><line x1="1" y1="13" x2="23" y2="13" stroke="white" stroke-width="1.2"/></svg></span>
           Transport Request
         </NuxtLink>
-        <div>
+        <div v-if="canView('VEHICLES')">
+          <button class="nav-item w-full" @click="openMenus.vehicles = !openMenus.vehicles">
+            <span class="nav-icon" style="background:#E0F2FE;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="1" y="9" width="22" height="10" rx="2" fill="#0EA5E9"/><circle cx="6.5" cy="19" r="2" fill="#0369A1"/><circle cx="17.5" cy="19" r="2" fill="#0369A1"/><path d="M1 13h22" stroke="white" stroke-width="1.2"/><path d="M5 9V7a2 2 0 012-2h10a2 2 0 012 2v2" stroke="#0EA5E9" stroke-width="1.5"/></svg></span>
+            <span>Vehicle Management</span>
+            <svg class="w-3 h-3 text-gray-300 transition-transform duration-200 absolute right-2" :class="openMenus.vehicles ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="submenu" :class="{ 'submenu-open': openMenus.vehicles }">
+            <NuxtLink to="/vehicles" class="nav-sub-item">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#0EA5E9;"></span>
+              Vehicle
+            </NuxtLink>
+            <NuxtLink to="/vehicles/documents" class="nav-sub-item">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#6366F1;"></span>
+              Document
+            </NuxtLink>
+          </div>
+        </div>
+        <div v-if="canView('INVENTORY')">
           <button class="nav-item w-full" @click="openMenus.inventory = !openMenus.inventory">
             <span class="nav-icon" style="background:#F3E8FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="18" rx="2" fill="#8B5CF6"/><line x1="2" y1="9" x2="22" y2="9" stroke="white" stroke-width="1.5"/><line x1="2" y1="15" x2="22" y2="15" stroke="white" stroke-width="1.5"/><line x1="8" y1="9" x2="8" y2="21" stroke="white" stroke-width="1.5"/></svg></span>
             <span>Stationery Inventory</span>
@@ -206,20 +253,24 @@ watch(() => router.currentRoute.value.path, closeMobile)
             </NuxtLink>
           </div>
         </div>
-        <div>
+        <div v-if="canView('STAFF') || canView('BRANCHES') || canView('ROLES')">
           <button class="nav-item w-full" @click="openMenus.userMgmt = !openMenus.userMgmt">
             <span class="nav-icon" style="background:#F3E8FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="4" fill="#7C3AED"/><path d="M1 21c0-4 3.6-7 8-7s8 3 8 7" fill="#7C3AED"/><circle cx="19" cy="8" r="3" fill="#A78BFA"/><path d="M15 21c0-2.5 1.8-4.5 4-5" stroke="#A78BFA" stroke-width="1.5" stroke-linecap="round"/></svg></span>
             <span>User Management</span>
             <svg class="w-3 h-3 text-gray-300 transition-transform duration-200 absolute right-2" :class="openMenus.userMgmt ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <div class="submenu" :class="{ 'submenu-open': openMenus.userMgmt }">
-            <NuxtLink to="/staff" class="nav-sub-item">
+            <NuxtLink v-if="canView('STAFF')" to="/staff" class="nav-sub-item">
               <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#7C3AED;"></span>
               User List
             </NuxtLink>
-            <NuxtLink to="/settings/branches" class="nav-sub-item">
+            <NuxtLink v-if="canView('BRANCHES')" to="/settings/branches" class="nav-sub-item">
               <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#F97316;"></span>
-              Branch Management
+              Organization Setup
+            </NuxtLink>
+            <NuxtLink v-if="canView('ROLES')" to="/roles" class="nav-sub-item">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#6366F1;"></span>
+              Role Management
             </NuxtLink>
           </div>
         </div>

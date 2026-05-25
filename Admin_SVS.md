@@ -30,6 +30,12 @@ This file must be updated every time the database schema is created, changed, or
 | 2026-05-20 | Seed data     | Inserted branch: 010 - Main Branch (type: HEAD)                             | PELAY |
 | 2026-05-20 | Create table  | Created vehicle_request_passengers table to track passengers per request    | PELAY |
 | 2026-05-20 | Drop column   | Dropped job_title from staff — duplicated position, use position only       | PELAY |
+| 2026-05-22 | Update data   | Renamed resource "Branch Management" → "Organization Management" (code: BRANCHES) | PELAY |
+| 2026-05-22 | Drop columns  | Removed 7 inline document columns from vehicles (vehicle_document, road_tax_expiry, road_tax_document, insurance_expiry, insurance_document, lease_expiry, lease_document) | PELAY |
+| 2026-05-22 | Create table  | Created vehicle_documents table — stores documents per vehicle with name, issued_date, expiry_date, file_path, uploaded_by | PELAY |
+| 2026-05-22 | Add columns   | Added verify_status, reject_reason, verified_by, verified_at to vehicles for vehicle approval workflow (PENDING/APPROVED/REJECTED) | PELAY |
+| 2026-05-22 | Add column    | Added request_number (VARCHAR2 30, UNIQUE, NOT NULL) to vehicle_requests — auto-generated as REQ-YYYYMMDD-NNNN via sequence vehicle_request_seq + trigger trg_vr_request_number | PELAY |
+| 2026-05-22 | Add columns   | Added soft-delete columns to vehicle_documents: deleted VARCHAR2(1) DEFAULT 'N' NOT NULL, deleted_by NUMBER (FK staff.id), deleted_at TIMESTAMP | PELAY |
 
 ---
 
@@ -175,40 +181,61 @@ This file must be updated every time the database schema is created, changed, or
 
 ### vehicles
 
-| Column             | Type          | Nullable | Notes                                             |
-|--------------------|---------------|----------|---------------------------------------------------|
-| id                 | NUMBER        | NO       | Primary key, auto-increment                       |
-| plate_number       | VARCHAR2(20)  | NO       | Unique vehicle plate number                       |
-| part_number        | VARCHAR2(100) | YES      | Internal part reference number                    |
-| engine_number      | VARCHAR2(100) | YES      | Engine number                                     |
-| frame_number       | VARCHAR2(100) | YES      | Chassis / frame number                            |
-| brand              | VARCHAR2(100) | YES      | Vehicle brand (e.g. Toyota)                       |
-| model              | VARCHAR2(100) | YES      | Vehicle model (e.g. Hilux)                        |
-| color              | VARCHAR2(50)  | YES      | Vehicle color                                     |
-| year               | NUMBER(4)     | YES      | Manufacturing year                                |
-| type               | VARCHAR2(20)  | YES      | SEDAN / VAN / TRUCK / SUV / PICKUP / OTHER        |
-| ownership_type     | VARCHAR2(10)  | NO       | `OWN` or `LEASE` — default `OWN`                  |
-| vehicle_document   | VARCHAR2(500) | YES      | File path — vehicle registration / grant          |
-| parking_lot        | VARCHAR2(50)  | YES      | Parking lot identifier                            |
-| parking_floor      | VARCHAR2(10)  | YES      | Parking floor                                     |
-| road_tax_expiry    | DATE          | YES      | Road tax expiry date                              |
-| road_tax_document  | VARCHAR2(500) | YES      | File path — road tax document                     |
-| insurance_expiry   | DATE          | YES      | Insurance expiry date                             |
-| insurance_document | VARCHAR2(500) | YES      | File path — insurance document                    |
-| lease_expiry       | DATE          | YES      | Lease agreement expiry date (LEASE only)          |
-| lease_document     | VARCHAR2(500) | YES      | File path — lease agreement document              |
-| owner_name         | VARCHAR2(150) | YES      | Vehicle owner full name                           |
-| owner_email        | VARCHAR2(150) | YES      | Vehicle owner email                               |
-| owner_phone        | VARCHAR2(20)  | YES      | Vehicle owner phone                               |
-| owner_dob          | DATE          | YES      | Vehicle owner date of birth                       |
-| branch_id          | NUMBER        | NO       | FK → branches.id                                  |
-| status             | VARCHAR2(20)  | NO       | `AVAILABLE` / `IN_USE` / `MAINTENANCE` / `LEASE_EXPIRED` |
-| created_by         | NUMBER        | YES      | FK → staff.id                                     |
-| updated_by         | NUMBER        | YES      | FK → staff.id                                     |
-| created_at         | TIMESTAMP     | NO       | Default CURRENT_TIMESTAMP                         |
-| updated_at         | TIMESTAMP     | NO       | Default CURRENT_TIMESTAMP                         |
+| Column         | Type          | Nullable | Notes                                             |
+|----------------|---------------|----------|---------------------------------------------------|
+| id             | NUMBER        | NO       | Primary key, auto-increment                       |
+| plate_number   | VARCHAR2(20)  | NO       | Unique vehicle plate number                       |
+| part_number    | VARCHAR2(100) | YES      | Internal part reference number                    |
+| engine_number  | VARCHAR2(100) | YES      | Engine number                                     |
+| frame_number   | VARCHAR2(100) | YES      | Chassis / frame number                            |
+| brand          | VARCHAR2(100) | YES      | Vehicle brand (e.g. Toyota)                       |
+| model          | VARCHAR2(100) | YES      | Vehicle model (e.g. Hilux)                        |
+| color          | VARCHAR2(50)  | YES      | Vehicle color                                     |
+| year           | NUMBER(4)     | YES      | Manufacturing year                                |
+| type           | VARCHAR2(20)  | YES      | SEDAN / VAN / TRUCK / SUV / PICKUP / OTHER        |
+| ownership_type | VARCHAR2(10)  | NO       | `OWN` or `LEASE` — default `OWN`                  |
+| parking_lot    | VARCHAR2(50)  | YES      | Parking lot identifier                            |
+| parking_floor  | VARCHAR2(10)  | YES      | Parking floor                                     |
+| owner_name     | VARCHAR2(150) | YES      | Vehicle owner full name                           |
+| owner_email    | VARCHAR2(150) | YES      | Vehicle owner email                               |
+| owner_phone    | VARCHAR2(20)  | YES      | Vehicle owner phone                               |
+| owner_dob      | DATE          | YES      | Vehicle owner date of birth                       |
+| branch_id      | NUMBER        | NO       | FK → branches.id                                  |
+| status         | VARCHAR2(20)  | NO       | `AVAILABLE` / `IN_USE` / `MAINTENANCE` / `LEASE_EXPIRED` |
+| created_by     | NUMBER        | YES      | FK → staff.id                                     |
+| updated_by     | NUMBER        | YES      | FK → staff.id                                     |
+| verify_status  | VARCHAR2(10)  | NO       | `PENDING` / `APPROVED` / `REJECTED` — default `PENDING` |
+| reject_reason  | VARCHAR2(500) | YES      | Filled when verify_status = `REJECTED`            |
+| verified_by    | NUMBER        | YES      | FK → staff.id — who approved or rejected          |
+| verified_at    | TIMESTAMP     | YES      | When the verification decision was made           |
+| created_at     | TIMESTAMP     | NO       | Default CURRENT_TIMESTAMP                         |
+| updated_at     | TIMESTAMP     | NO       | Default CURRENT_TIMESTAMP                         |
 
-**Constraints:** `uq_vehicle_plate`, `chk_vehicle_status`, `chk_vehicle_type`, `chk_vehicle_ownership`
+**Constraints:** `uq_vehicle_plate`, `chk_vehicle_status`, `chk_vehicle_type`, `chk_vehicle_ownership`, `chk_vehicle_verify`, `fk_vehicle_verified`
+
+**Verify flow:** `PENDING` → `APPROVED` or `REJECTED` (with reject_reason filled on rejection)
+
+> **Note (2026-05-22):** Document columns (`vehicle_document`, `road_tax_expiry`, `road_tax_document`, `insurance_expiry`, `insurance_document`, `lease_expiry`, `lease_document`) were dropped and moved to the `vehicle_documents` table.
+
+---
+
+### vehicle_documents
+
+| Column        | Type          | Nullable | Notes                                              |
+|---------------|---------------|----------|----------------------------------------------------|
+| id            | NUMBER        | NO       | Primary key, auto-increment                        |
+| vehicle_id    | NUMBER        | NO       | FK → vehicles.id (cascade delete)                  |
+| document_name | VARCHAR2(150) | NO       | e.g. "Registration", "Road Tax", "Insurance"       |
+| issued_date   | DATE          | YES      | Date the document was issued                       |
+| expiry_date   | DATE          | YES      | Document expiry date                               |
+| file_path     | VARCHAR2(500) | YES      | Uploaded image or document file path               |
+| uploaded_by   | NUMBER        | YES      | FK → staff.id — who uploaded the document          |
+| created_at    | TIMESTAMP     | NO       | Default CURRENT_TIMESTAMP                          |
+| updated_at    | TIMESTAMP     | NO       | Default CURRENT_TIMESTAMP                          |
+
+**Constraints:** `fk_vd_vehicle` (cascade delete), `fk_vd_uploaded`
+
+**Index:** `idx_vd_vehicle_id` on vehicle_id for fast lookup
 
 ---
 
@@ -217,6 +244,7 @@ This file must be updated every time the database schema is created, changed, or
 | Column              | Type          | Nullable | Notes                                                        |
 |---------------------|---------------|----------|--------------------------------------------------------------|
 | id                  | NUMBER        | NO       | Primary key, auto-increment                                  |
+| request_number      | VARCHAR2(30)  | NO       | Unique human-readable ID — auto-generated as `REQ-YYYYMMDD-NNNN` |
 | vehicle_id          | NUMBER        | NO       | FK → vehicles.id                                             |
 | staff_id            | NUMBER        | NO       | FK → staff.id — who made the request                         |
 | driver_id           | NUMBER        | YES      | FK → staff.id — assigned driver (optional)                   |

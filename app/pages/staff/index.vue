@@ -17,13 +17,15 @@ const listLoading = ref(false)
 const listError   = ref('')
 const search      = ref('')
 const filterStatus = ref('')
-const pagination  = reactive({ current_page: 1, total_page: 1, total_data: 0 })
+const pagination  = reactive({ current_page: 1, total_page: 1, total_data: 0, per_page: 10 })
+const perPage     = ref(10)
+const PER_PAGE_OPTS = [10, 20, 30]
 
 async function fetchStaff(page = 1) {
   listLoading.value = true
   listError.value   = ''
   try {
-    const params = new URLSearchParams({ page, limit: 20 })
+    const params = new URLSearchParams({ page, limit: perPage.value })
     if (search.value)       params.set('search', search.value)
     if (filterStatus.value) params.set('status', filterStatus.value)
     const res = await $api(`/api/staff?${params}`)
@@ -36,7 +38,11 @@ async function fetchStaff(page = 1) {
   }
 }
 
+const staffFrom = computed(() => pagination.total_data === 0 ? 0 : (pagination.current_page - 1) * perPage.value + 1)
+const staffTo   = computed(() => Math.min(pagination.current_page * perPage.value, pagination.total_data))
+
 watch([search, filterStatus], () => fetchStaff(1))
+watch(perPage, () => fetchStaff(1))
 
 onMounted(() => {
   fetchStaff()
@@ -140,22 +146,41 @@ async function downloadTemplate() {
 
     const { utils, writeFile } = await import('xlsx')
 
-    // ── Main "Staff" sheet ────────────────────────────────────────────────
-    const ws = utils.aoa_to_sheet([
-      TEMPLATE_HEADERS,
-      [
-        'Somchai Keovong',
-        'somchai@indochinabank.com',
-        'Pass@1234',
-        '020123456',
-        'Officer',
-        branchCodes[0] ?? '010',
-        deptNames[0]   ?? 'IT Software Development',
-        roleCodes[0]   ?? 'MAKER',
-      ],
+    // ── Build AOA: data cols A–H + separator col I + reference cols J–L ─
+    const refLen  = Math.max(branchCodes.length, deptNames.length, roleCodes.length)
+    const rows    = []
+
+    // Row 0 — headers (cols A–H are real headers; I = separator; J–L = ref headers)
+    rows.push([
+      ...TEMPLATE_HEADERS,
+      '',
+      'Available branch_code', 'Available department', 'Available role_code',
     ])
 
-    // Force text format on phone (col 3) and branch_code (col 5)
+    // Row 1 — sample data + first reference values
+    rows.push([
+      'Somchai Keovong',
+      'somchai@indochinabank.com',
+      'Pass@1234',
+      '020123456',
+      'Officer',
+      branchCodes[0] ?? '010',
+      deptNames[0]   ?? 'IT',
+      roleCodes[0]   ?? 'MAKER',
+      '',
+      branchCodes[0] ?? '',
+      deptNames[0]   ?? '',
+      roleCodes[0]   ?? '',
+    ])
+
+    // Rows 2+ — empty data rows + remaining reference values
+    for (let i = 1; i < refLen; i++) {
+      rows.push(['', '', '', '', '', '', '', '', '', branchCodes[i] ?? '', deptNames[i] ?? '', roleCodes[i] ?? ''])
+    }
+
+    const ws = utils.aoa_to_sheet(rows)
+
+    // Force text format on phone (col D=3) and branch_code (col F=5) in data rows
     const textCols = [3, 5]
     const range = utils.decode_range(ws['!ref'])
     for (let r = 1; r <= range.e.r; r++) {
@@ -163,44 +188,28 @@ async function downloadTemplate() {
         const addr = utils.encode_cell({ r, c })
         if (ws[addr]) { ws[addr].t = 's'; ws[addr].z = '@' }
       }
+      // Also force text on branch_code ref column (col J=9)
+      const refBranchAddr = utils.encode_cell({ r, c: 9 })
+      if (ws[refBranchAddr] && ws[refBranchAddr].v) { ws[refBranchAddr].t = 's'; ws[refBranchAddr].z = '@' }
     }
 
     ws['!cols'] = [
-      { wch: 25 }, { wch: 35 }, { wch: 15 }, { wch: 15 },
-      { wch: 20 }, { wch: 12 }, { wch: 30 }, { wch: 15 },
+      { wch: 25 }, { wch: 35 }, { wch: 15 }, { wch: 15 },  // A–D
+      { wch: 20 }, { wch: 12 }, { wch: 30 }, { wch: 15 },  // E–H
+      { wch: 3  },                                           // I separator
+      { wch: 18 }, { wch: 30 }, { wch: 18 },                // J–L reference
     ]
 
     // Dropdown validation — F = branch_code, G = department, H = role_code
-    const bEnd = branchCodes.length + 1
-    const dEnd = deptNames.length + 1
-    const rEnd = roleCodes.length + 1
     ws['!datavalidation'] = [
-      { sqref: 'F2:F1001', type: 'list', formula1: `Lists!$A$2:$A$${bEnd}` },
-      { sqref: 'G2:G1001', type: 'list', formula1: `Lists!$B$2:$B$${dEnd}` },
-      { sqref: 'H2:H1001', type: 'list', formula1: `Lists!$C$2:$C$${rEnd}` },
+      { sqref: 'F2:F1001', type: 'list', formula1: `"${branchCodes.join(',')}"`, showDropDown: false },
+      { sqref: 'G2:G1001', type: 'list', formula1: `"${deptNames.join(',')}"`,   showDropDown: false },
+      { sqref: 'H2:H1001', type: 'list', formula1: `"${roleCodes.join(',')}"`,   showDropDown: false },
     ]
 
-    // ── Hidden "Lists" sheet (dropdown source) ────────────────────────────
-    const maxLen  = Math.max(branchCodes.length, deptNames.length, roleCodes.length)
-    const listsData = [['branch_code', 'department', 'role_code']]
-    for (let i = 0; i < maxLen; i++) {
-      listsData.push([branchCodes[i] ?? '', deptNames[i] ?? '', roleCodes[i] ?? ''])
-    }
-    const listsWs = utils.aoa_to_sheet(listsData)
-
-    // Keep branch_code column as text in the Lists sheet too
-    for (let r = 1; r < listsData.length; r++) {
-      const addr = utils.encode_cell({ r, c: 0 })
-      if (listsWs[addr]) { listsWs[addr].t = 's'; listsWs[addr].z = '@' }
-    }
-
-    // ── Build workbook ────────────────────────────────────────────────────
+    // ── Build workbook (single sheet — no hidden Lists sheet needed) ──────
     const wb = utils.book_new()
-    utils.book_append_sheet(wb, ws,      'Staff')
-    utils.book_append_sheet(wb, listsWs, 'Lists')
-
-    // Hide the Lists sheet so users don't see / accidentally edit it
-    wb.Workbook = { Sheets: [{ Hidden: 0 }, { Hidden: 1 }] }
+    utils.book_append_sheet(wb, ws, 'Staff')
 
     writeFile(wb, 'staff_upload_template.xlsx')
   } catch (e) {
@@ -218,14 +227,17 @@ async function parseFile(file) {
         const ws = wb.Sheets[wb.SheetNames[0]]
         // header_offset:1 → first row is headers
         const jsonRows = utils.sheet_to_json(ws, { defval: '' })
-        // Normalize header keys to lowercase
+        // Only keep the 8 real data fields — ignore reference/separator columns
+        const DATA_FIELDS = ['name','email','password','phone','position','branch_code','department','role_code']
+        const DATA_SET = new Set(DATA_FIELDS)
         const rows = jsonRows.map((r, idx) => {
           const norm = { _row: idx + 2 }
           for (const [k, v] of Object.entries(r)) {
-            norm[k.trim().toLowerCase().replace(/\s+/g, '_')] = String(v ?? '').trim()
+            const key = k.trim().toLowerCase().replace(/\s+/g, '_')
+            if (DATA_SET.has(key)) norm[key] = String(v ?? '').trim()
           }
           return norm
-        }).filter(r => Object.keys(r).length > 1) // skip empty rows
+        }).filter(r => DATA_FIELDS.some(k => r[k])) // skip rows where ALL data fields are empty
         resolve(rows)
       } catch (err) {
         reject(new Error('Could not parse file: ' + err.message))
@@ -441,7 +453,7 @@ async function submitUpload() {
                 :key="staff.ID"
                 class="border-t border-gray-50 hover:bg-purple-50 transition-colors"
               >
-                <td class="px-4 py-3 text-gray-400 text-xs">{{ (pagination.current_page - 1) * 20 + idx + 1 }}</td>
+                <td class="px-4 py-3 text-gray-400 text-xs">{{ staffFrom + idx }}</td>
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-2">
                     <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
@@ -481,24 +493,46 @@ async function submitUpload() {
         </div>
 
         <!-- Pagination -->
-        <div v-if="pagination.total_page > 1" class="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-          <span class="text-xs text-gray-400">
-            Total {{ pagination.total_data }} staff
-          </span>
-          <div class="flex gap-1">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100">
+          <div class="flex items-center gap-2 text-xs text-gray-500">
+            <span>Show</span>
+            <select
+              v-model="perPage"
+              class="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400"
+            >
+              <option v-for="n in PER_PAGE_OPTS" :key="n" :value="n">{{ n }}</option>
+            </select>
+            <span>entries</span>
+            <span class="ml-2 text-gray-400">
+              Showing {{ staffFrom }}–{{ staffTo }} of {{ pagination.total_data }}
+            </span>
+          </div>
+          <div class="flex items-center gap-1">
             <button
               :disabled="!pagination.has_previous_page"
-              class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-500 hover:border-purple-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              class="px-2.5 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               @click="fetchStaff(pagination.current_page - 1)"
-            >← Prev</button>
-            <span class="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style="background:#7C3AED;">
-              {{ pagination.current_page }}
-            </span>
+            >Prev</button>
+            <template v-for="p in pagination.total_page" :key="p">
+              <button
+                v-if="pagination.total_page <= 7 || Math.abs(p - pagination.current_page) <= 1 || p === 1 || p === pagination.total_page"
+                class="w-7 h-7 text-xs rounded-lg border transition-colors"
+                :class="p === pagination.current_page
+                  ? 'text-white font-medium border-transparent'
+                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'"
+                :style="p === pagination.current_page ? 'background:#7C3AED;' : ''"
+                @click="fetchStaff(p)"
+              >{{ p }}</button>
+              <span
+                v-else-if="p === pagination.current_page - 2 || p === pagination.current_page + 2"
+                class="text-gray-400 text-xs px-0.5"
+              >…</span>
+            </template>
             <button
               :disabled="!pagination.has_next_page"
-              class="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-500 hover:border-purple-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              class="px-2.5 py-1 text-xs rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               @click="fetchStaff(pagination.current_page + 1)"
-            >Next →</button>
+            >Next</button>
           </div>
         </div>
       </div>

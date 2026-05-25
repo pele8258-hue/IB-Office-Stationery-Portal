@@ -83,6 +83,24 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // Load role permissions map: { RESOURCE_CODE: { view, create, edit, delete } }
+  const permRows = await query(
+    `SELECT res.code, rr.can_view, rr.can_create, rr.can_edit, rr.can_delete
+     FROM role_resources rr
+     JOIN resources res ON res.id = rr.resource_id
+     WHERE rr.role_id = :role_id AND res.status = 'A'`,
+    { role_id: staff.ROLE_ID }
+  )
+  const permissions = {}
+  for (const p of permRows) {
+    permissions[p.CODE] = {
+      view:   p.CAN_VIEW   === 1,
+      create: p.CAN_CREATE === 1,
+      edit:   p.CAN_EDIT   === 1,
+      delete: p.CAN_DELETE === 1,
+    }
+  }
+
   // Sign JWT
   const token = signToken({
     id:            staff.ID,
@@ -111,8 +129,10 @@ export default defineEventHandler(async (event) => {
         department:      staff.DEPARTMENT_NAME,
         branch_id:       staff.BRANCH_ID,
         department_id:   staff.DEPARTMENT_ID,
+        role_id:         staff.ROLE_ID,
         status:          staff.STATUS,
       },
+      permissions,
     },
     meta: {
       login_at:       new Date().toISOString(),

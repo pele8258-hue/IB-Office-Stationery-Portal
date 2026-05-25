@@ -289,3 +289,34 @@ Content-Type: application/json
 ```
 
 ---
+
+## DELETE Vehicle Document (Soft Delete)
+
+**Module:** Vehicles – Documents
+**Method:** `DELETE`
+**URL:** `/api/vehicles/documents/:id`
+**Auth Required:** Yes (Bearer Token)
+**File:** `server/api/vehicles/documents/[id].delete.js`
+
+### Notes
+- Soft delete only: sets `deleted = 'Y'`, `deleted_by`, `deleted_at`. Record stays in DB.
+- Documents with `deleted = 'Y'` are excluded from all system queries.
+- Run `database/010_vehicle_documents_soft_delete.sql` to add the required columns.
+
+### Success Response (200)
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Document deleted successfully",
+  "data": { "id": 5 },
+  "timestamp": "2026-05-22T10:00:00.000Z"
+}
+```
+
+### Error Responses
+- `400` — Invalid document ID
+- `404` — Document not found (already deleted or never existed)
+- `401` — Unauthorized
+
+---
