@@ -7,9 +7,11 @@ const ROUTE_RESOURCE: Record<string, string> = {
   '/inventory/categories': 'INVENTORY',
   '/staff':                'STAFF',
   '/settings/branches':    'BRANCHES',
-  '/vehicles':             'VEHICLES',
-  '/vehicles/documents':   'VEHICLES',
-  '/roles':                'ROLES',
+  '/vehicles':                   'VEHICLES',
+  '/vehicles/documents':         'VEHICLES',
+  '/roles':                      'ROLES',
+  '/reports/vehicle/requests':   'REPORTS',
+  '/reports/vehicle/department': 'REPORTS',
 }
 
 export default defineNuxtRouteMiddleware((to) => {

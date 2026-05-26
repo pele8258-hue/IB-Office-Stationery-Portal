@@ -36,6 +36,12 @@ This file must be updated every time the database schema is created, changed, or
 | 2026-05-22 | Add columns   | Added verify_status, reject_reason, verified_by, verified_at to vehicles for vehicle approval workflow (PENDING/APPROVED/REJECTED) | PELAY |
 | 2026-05-22 | Add column    | Added request_number (VARCHAR2 30, UNIQUE, NOT NULL) to vehicle_requests — auto-generated as REQ-YYYYMMDD-NNNN via sequence vehicle_request_seq + trigger trg_vr_request_number | PELAY |
 | 2026-05-22 | Add columns   | Added soft-delete columns to vehicle_documents: deleted VARCHAR2(1) DEFAULT 'N' NOT NULL, deleted_by NUMBER (FK staff.id), deleted_at TIMESTAMP | PELAY |
+| 2026-05-25 | Add column    | Added request_no (VARCHAR2 20, NOT NULL) to vehicle_requests — auto-generated as VR-DDMMYYYYHHMM via trigger trg_vrequest_request_no on INSERT | PELAY |
+| 2026-05-25 | Modify column | Made vehicle_id nullable in vehicle_requests — vehicle is assigned by checker/admin during approval, not by the maker | PELAY |
+| 2026-05-26 | Add columns   | Added meter_before NUMBER, meter_after NUMBER, time_out_photo VARCHAR2(500), time_in_photo VARCHAR2(500) to vehicle_requests for trip departure/return recording (migration 014) | PELAY |
+| 2026-05-26 | Fix column    | Modified meter_before and meter_after from NUMBER(10,1) to NUMBER (no precision limit) — ORA-01438 fix, migration 004 created them with too-tight precision (migration 015) | PELAY |
+| 2026-05-26 | Create table  | Created role_resources table — maps roles to resources with can_view/can_create/can_edit/can_delete flags (NUMBER 0/1) (migration 016) | PELAY |
+| 2026-05-26 | Seed data     | Inserted REPORTS resource (code: REPORTS, module: ADMIN) — controls access to vehicle request and department report pages (migration 016) | PELAY |
 
 ---
 

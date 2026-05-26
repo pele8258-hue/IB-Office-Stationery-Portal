@@ -8,11 +8,12 @@ import { query } from '../../utils/db.js'
 export default defineEventHandler(async (event) => {
   const q      = getQuery(event)
   const page   = Math.max(1, parseInt(q.page)  || 1)
-  const limit  = Math.min(100, parseInt(q.limit) || 10)
+  const limit  = Math.min(500, parseInt(q.limit) || 10)
   const offset = (page - 1) * limit
-  const search = (q.search || '').trim()
-  const status = q.status || ''
-  const type   = q.type   || ''
+  const search       = (q.search || '').trim()
+  const status       = q.status        || ''
+  const type         = q.type          || ''
+  const verifyStatus = q.verify_status || ''
 
   const whereParts = ['1=1']
   const bindObj    = {}
@@ -23,8 +24,9 @@ export default defineEventHandler(async (event) => {
     bindObj.s3 = `%${search.toUpperCase()}%`
     whereParts.push(`(UPPER(v.plate_number) LIKE :s1 OR UPPER(v.brand) LIKE :s2 OR UPPER(v.model) LIKE :s3)`)
   }
-  if (status) { bindObj.status = status; whereParts.push(`v.status = :status`) }
-  if (type)   { bindObj.type   = type;   whereParts.push(`v.type   = :type`)   }
+  if (status)       { bindObj.status        = status;       whereParts.push(`v.status        = :status`) }
+  if (type)         { bindObj.type          = type;         whereParts.push(`v.type          = :type`) }
+  if (verifyStatus) { bindObj.verify_status = verifyStatus; whereParts.push(`v.verify_status = :verify_status`) }
 
   const where = 'WHERE ' + whereParts.join(' AND ')
 

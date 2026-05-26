@@ -1,5 +1,6 @@
 <script setup>
 definePageMeta({ middleware: 'auth' })
+import bgVientiane from '~/assets/images/backgrounds/vientiane_capital_pastel_dream_20260430_085013 1.png'
 
 const { $api } = useNuxtApp()
 
@@ -18,6 +19,15 @@ const EXPIRY_OPTS = [
   { value: 'soon',    label: 'Expiring Soon (60 days)' },
   { value: 'all',     label: 'All Documents' },
 ]
+
+// Expired doc count badge
+const expiredCount = ref(0)
+async function fetchExpiredCount() {
+  try {
+    const res = await $api('/api/vehicles/documents/expired-count')
+    expiredCount.value = res.count || 0
+  } catch {}
+}
 
 // Vehicle dropdown
 const vehicles = ref([])
@@ -89,7 +99,7 @@ function openEdit(doc) {
     document_name: doc.DOCUMENT_NAME || '',
     issued_date:   doc.ISSUED_DATE ? doc.ISSUED_DATE.substring(0, 10) : '',
     expiry_date:   doc.EXPIRY_DATE ? doc.EXPIRY_DATE.substring(0, 10) : '',
-    vehicle_id:    doc.VEHICLE_ID || '',
+    vehicle_id:    doc.VEHICLE_ID ? Number(doc.VEHICLE_ID) : '',
     file: null,
   })
   editErrors.value = {}
@@ -103,7 +113,7 @@ async function saveEdit() {
   try {
     const fd = new FormData()
     fd.append('document_name', editForm.document_name)
-    if (editForm.vehicle_id)  fd.append('vehicle_id',  editForm.vehicle_id)
+    if (editForm.vehicle_id)  fd.append('vehicle_id',  Number(editForm.vehicle_id))
     if (editForm.issued_date) fd.append('issued_date', editForm.issued_date)
     if (editForm.expiry_date) fd.append('expiry_date', editForm.expiry_date)
     if (editForm.file)        fd.append('file', editForm.file)
@@ -124,15 +134,68 @@ const previewName = ref('')
 function openPreview(doc) { previewSrc.value = doc.FILE_PATH; previewName.value = doc.DOCUMENT_NAME }
 function closePreview()   { previewSrc.value = null; previewName.value = '' }
 
+// ── Manual notify ─────────────────────────────────────────────────────────────
+const notifyingIds = ref(new Set())
+const toast        = reactive({ show: false, msg: '', ok: true })
+let toastTimer = null
+
+function showToast(msg, ok = true) {
+  if (toastTimer) clearTimeout(toastTimer)
+  toast.msg  = msg
+  toast.ok   = ok
+  toast.show = true
+  toastTimer = setTimeout(() => { toast.show = false }, 4000)
+}
+
+async function sendNotify(doc) {
+  if (notifyingIds.value.has(doc.ID)) return
+  notifyingIds.value = new Set([...notifyingIds.value, doc.ID])
+  try {
+    const res = await $api(`/api/vehicles/documents/notify/${doc.ID}`, { method: 'POST' })
+    showToast(res.message || 'Notification sent', true)
+  } catch (e) {
+    showToast(e?.data?.message || 'Failed to send notification', false)
+  } finally {
+    notifyingIds.value = new Set([...notifyingIds.value].filter(x => x !== doc.ID))
+  }
+}
+
 onMounted(() => {
   loadVehicles()
   fetchDocs()
+  fetchExpiredCount()
   window.addEventListener('keydown', e => { if (e.key === 'Escape') closePreview() })
 })
 </script>
 
 <template>
-  <div>
+  <div class="-m-4 md:-m-6 relative min-h-screen">
+    <div
+      class="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20 pointer-events-none"
+      :style="{ backgroundImage: `url('${bgVientiane}')` }"
+    ></div>
+    <div class="relative p-4 md:p-6">
+    <!-- Toast -->
+    <Teleport to="body">
+      <Transition name="toast">
+        <div
+          v-if="toast.show"
+          class="fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-sm font-medium text-white"
+          :style="toast.ok ? 'background:#10b981;' : 'background:#ef4444;'"
+        >
+          <svg v-if="toast.ok" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M20 6L9 17l-5-5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2"/>
+            <line x1="12" y1="8" x2="12" y2="12" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="12" cy="16" r="1" fill="white"/>
+          </svg>
+          {{ toast.msg }}
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- Header -->
     <div class="mb-6">
       <h1 class="text-xl font-bold text-gray-800">Vehicle Documents</h1>
@@ -166,11 +229,20 @@ onMounted(() => {
         <button
           v-for="opt in EXPIRY_OPTS"
           :key="opt.value"
-          class="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
+          class="relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all"
           :class="expiryFilter === opt.value ? 'text-white' : 'text-gray-500 hover:text-gray-700'"
           :style="expiryFilter === opt.value ? activeTabStyle(opt.value) : ''"
           @click="expiryFilter = opt.value"
-        >{{ opt.label }}</button>
+        >
+          {{ opt.label }}
+          <span
+            v-if="opt.value === 'expired' && expiredCount > 0"
+            class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold"
+            :class="expiryFilter === 'expired' ? 'bg-white text-red-500' : 'bg-red-500 text-white'"
+          >
+            {{ expiredCount > 99 ? '99+' : expiredCount }}
+          </span>
+        </button>
       </div>
     </div>
 
@@ -276,6 +348,23 @@ onMounted(() => {
                     class="text-xs text-gray-400 hover:text-gray-700 font-medium"
                     @click="openEdit(doc)"
                   >Edit</button>
+                  <!-- Notify button — shown for expired or expiring soon docs that have an owner email -->
+                  <button
+                    v-if="(isExpired(doc.EXPIRY_DATE) || isExpiringSoon(doc.EXPIRY_DATE)) && doc.EXPIRY_DATE"
+                    :disabled="notifyingIds.has(doc.ID)"
+                    class="flex items-center gap-1 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    :class="isExpired(doc.EXPIRY_DATE) ? 'text-red-400 hover:text-red-600' : 'text-yellow-500 hover:text-yellow-700'"
+                    :title="`Send expiry notification email`"
+                    @click="sendNotify(doc)"
+                  >
+                    <svg v-if="notifyingIds.has(doc.ID)" class="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="32" stroke-dashoffset="12"/>
+                    </svg>
+                    <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none">
+                      <path d="M4 4l16 8-16 8V4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    </svg>
+                    {{ notifyingIds.has(doc.ID) ? 'Sending...' : 'Send Email' }}
+                  </button>
                 </div>
               </td>
             </tr>
@@ -364,7 +453,7 @@ onMounted(() => {
                   class="w-full px-3 py-2.5 text-sm rounded-lg border border-gray-200 bg-white text-gray-700 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
                 >
                   <option value="" disabled>— Select vehicle —</option>
-                  <option v-for="v in vehicles" :key="v.ID" :value="v.ID">
+                  <option v-for="v in vehicles" :key="v.ID" :value="Number(v.ID)">
                     {{ v.PLATE_NUMBER }}{{ v.BRAND ? ' — ' + v.BRAND : '' }}{{ v.MODEL ? ' ' + v.MODEL : '' }}
                   </option>
                 </select>
@@ -464,6 +553,7 @@ onMounted(() => {
         </div>
       </Transition>
     </Teleport>
+    </div>
   </div>
 </template>
 
@@ -472,4 +562,9 @@ onMounted(() => {
 .lightbox-leave-active { transition: opacity 0.15s ease; }
 .lightbox-enter-from,
 .lightbox-leave-to     { opacity: 0; }
+
+.toast-enter-active { transition: all 0.25s ease; }
+.toast-leave-active { transition: all 0.2s ease; }
+.toast-enter-from   { opacity: 0; transform: translateY(12px); }
+.toast-leave-to     { opacity: 0; transform: translateY(6px); }
 </style>

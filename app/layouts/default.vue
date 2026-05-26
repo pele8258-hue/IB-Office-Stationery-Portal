@@ -5,11 +5,23 @@ const authStore = useAuthStore()
 const { logout } = useAuth()
 const router = useRouter()
 const { canView } = usePermissions()
+const { $api } = useNuxtApp()
 
-const openMenus = reactive({ stationary: true, inventory: true, userMgmt: true, vehicles: true })
+const openMenus = reactive({ stationary: true, inventory: true, userMgmt: true, vehicles: true, bookings: true, reports: true })
+const isAdminRole = computed(() => ['ADMIN', 'SUPER_ADMIN', 'CHECKER'].includes(authStore.user?.role_code))
 const mobileOpen = ref(false)
 
 function closeMobile() { mobileOpen.value = false }
+
+const expiredDocCount = ref(0)
+async function fetchExpiredCount() {
+  try {
+    const res = await $api('/api/vehicles/documents/expired-count')
+    expiredDocCount.value = res.count || 0
+  } catch {}
+}
+onMounted(fetchExpiredCount)
+
 
 watch(() => router.currentRoute.value.path, closeMobile)
 </script>
@@ -111,12 +123,25 @@ watch(() => router.currentRoute.value.path, closeMobile)
             </div>
           </template>
 
-          <NuxtLink v-if="canView('BOOKINGS')" to="/bookings" class="mob-item" @click="closeMobile">
-            <span class="nav-icon" style="background:#DCFCE7;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="1" y="9" width="22" height="10" rx="2" fill="#22C55E"/><circle cx="6.5" cy="19" r="2" fill="#166834"/><circle cx="17.5" cy="19" r="2" fill="#166834"/><line x1="1" y1="13" x2="23" y2="13" stroke="white" stroke-width="1.2"/></svg>
-            </span>
-            Transport Request
-          </NuxtLink>
+          <template v-if="canView('BOOKINGS')">
+            <button class="mob-item w-full" @click="openMenus.bookings = !openMenus.bookings">
+              <span class="nav-icon" style="background:#DCFCE7;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="1" y="9" width="22" height="10" rx="2" fill="#22C55E"/><circle cx="6.5" cy="19" r="2" fill="#166834"/><circle cx="17.5" cy="19" r="2" fill="#166834"/><line x1="1" y1="13" x2="23" y2="13" stroke="white" stroke-width="1.2"/></svg>
+              </span>
+              <span class="flex-1 text-left">Transport Request</span>
+              <svg class="w-3 h-3 text-gray-300 transition-transform" :class="openMenus.bookings ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+            <div v-if="openMenus.bookings" class="ml-3 pl-3 border-l border-gray-100 space-y-0.5">
+              <NuxtLink to="/bookings" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#22C55E;"></span>
+                My Request
+              </NuxtLink>
+              <NuxtLink v-if="isAdminRole" to="/bookings/verify" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#F97316;"></span>
+                Verify Request
+              </NuxtLink>
+            </div>
+          </template>
           <template v-if="canView('VEHICLES')">
             <button class="mob-item w-full" @click="openMenus.vehicles = !openMenus.vehicles">
               <span class="nav-icon" style="background:#E0F2FE;">
@@ -130,9 +155,12 @@ watch(() => router.currentRoute.value.path, closeMobile)
                 <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#0EA5E9;"></span>
                 Vehicle
               </NuxtLink>
-              <NuxtLink to="/vehicles/documents" class="mob-sub-item" @click="closeMobile">
+              <NuxtLink to="/vehicles/documents" class="mob-sub-item relative" @click="closeMobile">
                 <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#6366F1;"></span>
                 Document
+                <span v-if="expiredDocCount > 0" class="absolute right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white" style="background:#EF4444;">
+                  {{ expiredDocCount > 99 ? '99+' : expiredDocCount }}
+                </span>
               </NuxtLink>
             </div>
           </template>
@@ -178,6 +206,39 @@ watch(() => router.currentRoute.value.path, closeMobile)
                 <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#6366F1;"></span>
                 Role Management
               </NuxtLink>
+              <NuxtLink to="/notifications/email-logs" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#10B981;"></span>
+                Email Logs
+              </NuxtLink>
+            </div>
+          </template>
+          <!-- Report -->
+          <template v-if="canView('REPORTS')">
+            <button class="mob-item w-full" @click="openMenus.reports = !openMenus.reports">
+              <span class="nav-icon" style="background:#FEF3C7;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="12" width="4" height="9" rx="1" fill="#D97706"/>
+                  <rect x="10" y="7" width="4" height="14" rx="1" fill="#D97706"/>
+                  <rect x="17" y="3" width="4" height="18" rx="1" fill="#D97706"/>
+                </svg>
+              </span>
+              <span class="flex-1 text-left">Report</span>
+              <svg class="w-3 h-3 text-gray-300 transition-transform" :class="openMenus.reports ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="submenu ml-3 pl-3 border-l border-gray-100" :class="{ 'submenu-open': openMenus.reports }">
+              <div class="px-2 pt-2 pb-1 text-[9px] font-bold uppercase tracking-wider text-amber-500">Vehicle Report</div>
+              <NuxtLink to="/reports/vehicle/requests" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#D97706;"></span>
+                Request Report
+              </NuxtLink>
+              <NuxtLink to="/reports/vehicle/department" class="mob-sub-item" @click="closeMobile">
+                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#F59E0B;"></span>
+                Department Report
+              </NuxtLink>
+              <div class="px-2 pt-2 pb-1 flex items-center justify-between">
+                <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Stationary Report</span>
+                <span class="text-[8px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full font-semibold">Soon</span>
+              </div>
             </div>
           </template>
         </nav>
@@ -215,10 +276,23 @@ watch(() => router.currentRoute.value.path, closeMobile)
             </NuxtLink>
           </div>
         </div>
-        <NuxtLink v-if="canView('BOOKINGS')" to="/bookings" class="nav-item">
-          <span class="nav-icon" style="background:#DCFCE7;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="1" y="9" width="22" height="10" rx="2" fill="#22C55E"/><circle cx="6.5" cy="19" r="2" fill="#166834"/><circle cx="17.5" cy="19" r="2" fill="#166834"/><line x1="1" y1="13" x2="23" y2="13" stroke="white" stroke-width="1.2"/></svg></span>
-          Transport Request
-        </NuxtLink>
+        <div v-if="canView('BOOKINGS')">
+          <button class="nav-item w-full" @click="openMenus.bookings = !openMenus.bookings">
+            <span class="nav-icon" style="background:#DCFCE7;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="1" y="9" width="22" height="10" rx="2" fill="#22C55E"/><circle cx="6.5" cy="19" r="2" fill="#166834"/><circle cx="17.5" cy="19" r="2" fill="#166834"/><line x1="1" y1="13" x2="23" y2="13" stroke="white" stroke-width="1.2"/></svg></span>
+            <span>Transport Request</span>
+            <svg class="w-3 h-3 text-gray-300 transition-transform duration-200 absolute right-2" :class="openMenus.bookings ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="submenu" :class="{ 'submenu-open': openMenus.bookings }">
+            <NuxtLink to="/bookings" class="nav-sub-item">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#22C55E;"></span>
+              My Request
+            </NuxtLink>
+            <NuxtLink v-if="isAdminRole" to="/bookings/verify" class="nav-sub-item">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#F97316;"></span>
+              Verify Request
+            </NuxtLink>
+          </div>
+        </div>
         <div v-if="canView('VEHICLES')">
           <button class="nav-item w-full" @click="openMenus.vehicles = !openMenus.vehicles">
             <span class="nav-icon" style="background:#E0F2FE;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="1" y="9" width="22" height="10" rx="2" fill="#0EA5E9"/><circle cx="6.5" cy="19" r="2" fill="#0369A1"/><circle cx="17.5" cy="19" r="2" fill="#0369A1"/><path d="M1 13h22" stroke="white" stroke-width="1.2"/><path d="M5 9V7a2 2 0 012-2h10a2 2 0 012 2v2" stroke="#0EA5E9" stroke-width="1.5"/></svg></span>
@@ -230,9 +304,12 @@ watch(() => router.currentRoute.value.path, closeMobile)
               <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#0EA5E9;"></span>
               Vehicle
             </NuxtLink>
-            <NuxtLink to="/vehicles/documents" class="nav-sub-item">
+            <NuxtLink to="/vehicles/documents" class="nav-sub-item relative">
               <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#6366F1;"></span>
               Document
+              <span v-if="expiredDocCount > 0" class="absolute right-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white" style="background:#EF4444;">
+                {{ expiredDocCount > 99 ? '99+' : expiredDocCount }}
+              </span>
             </NuxtLink>
           </div>
         </div>
@@ -272,6 +349,41 @@ watch(() => router.currentRoute.value.path, closeMobile)
               <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#6366F1;"></span>
               Role Management
             </NuxtLink>
+            <NuxtLink to="/notifications/email-logs" class="nav-sub-item">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#10B981;"></span>
+              Email Logs
+            </NuxtLink>
+          </div>
+        </div>
+        <!-- Report -->
+        <div v-if="canView('REPORTS')">
+          <button class="nav-item w-full" @click="openMenus.reports = !openMenus.reports">
+            <span class="nav-icon" style="background:#FEF3C7;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="12" width="4" height="9" rx="1" fill="#D97706"/>
+                <rect x="10" y="7" width="4" height="14" rx="1" fill="#D97706"/>
+                <rect x="17" y="3" width="4" height="18" rx="1" fill="#D97706"/>
+              </svg>
+            </span>
+            <span>Report</span>
+            <svg class="w-3 h-3 text-gray-300 transition-transform duration-200 absolute right-2" :class="openMenus.reports ? 'rotate-180' : ''" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="submenu" :class="{ 'submenu-open': openMenus.reports }">
+            <!-- Vehicle Report group -->
+            <div class="px-2 pt-2 pb-1 text-[9px] font-bold uppercase tracking-wider text-amber-500">Vehicle Report</div>
+            <NuxtLink to="/reports/vehicle/requests" class="nav-sub-item">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#D97706;"></span>
+              Request Report
+            </NuxtLink>
+            <NuxtLink to="/reports/vehicle/department" class="nav-sub-item">
+              <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#F59E0B;"></span>
+              Department Report
+            </NuxtLink>
+            <!-- Stationary Report group -->
+            <div class="px-2 pt-3 pb-1 flex items-center justify-between">
+              <span class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Stationary Report</span>
+              <span class="text-[8px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full font-semibold">Soon</span>
+            </div>
           </div>
         </div>
       </nav>
@@ -353,7 +465,7 @@ watch(() => router.currentRoute.value.path, closeMobile)
   margin-top: 0;
 }
 .submenu.submenu-open {
-  max-height: 300px;
+  max-height: 400px;
   opacity: 1;
   padding-top: 2px;
   padding-bottom: 2px;

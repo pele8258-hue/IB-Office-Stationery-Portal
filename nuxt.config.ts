@@ -11,4 +11,13 @@ export default defineNuxtConfig({
   components: {
     dirs: [{ path: '~/components', pathPrefix: false }],
   },
+  nitro: {
+    experimental: {
+      tasks: true,
+    },
+    // Runs document:expiry-check every day at 08:00 server time
+    scheduledTasks: {
+      '0 8 * * *': ['document:expiry-check'],
+    },
+  },
 })

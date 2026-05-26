@@ -9,8 +9,9 @@ const vehicle  = ref(null)
 const loading  = ref(true)
 const error    = ref('')
 
-const isChecker = computed(() => ['CHECKER', 'SUPER_ADMIN'].includes(authStore.user?.role_code))
-const canEdit   = computed(() => !!authStore.permissions?.VEHICLES?.edit)
+const isChecker   = computed(() => ['CHECKER', 'SUPER_ADMIN'].includes(authStore.user?.role_code))
+const isAdminRole = computed(() => ['ADMIN', 'CHECKER', 'SUPER_ADMIN'].includes(authStore.user?.role_code))
+const canEdit     = computed(() => !!authStore.permissions?.VEHICLES?.edit)
 
 async function fetchVehicle() {
   loading.value = true
@@ -19,6 +20,7 @@ async function fetchVehicle() {
     const res     = await $api(`/api/vehicles/${route.params.id}`)
     vehicle.value = res.data
     if (editMode.value) populateEdit()
+    initStatusForm()
   } catch (e) {
     error.value = e?.data?.message || 'Failed to load vehicle'
   } finally {
@@ -122,6 +124,39 @@ async function doVerify(action) {
     verifyError.value = e?.data?.message || 'Action failed'
   } finally {
     verifying.value = false
+  }
+}
+
+// ── Status change (ADMIN / CHECKER / SUPER_ADMIN only) ────────────────────────
+const VEHICLE_STATUSES = ['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'LEASE_EXPIRED']
+const statusForm    = reactive({ status: '' })
+const statusSaving  = ref(false)
+const statusError   = ref('')
+const statusSuccess = ref(false)
+
+function initStatusForm() {
+  statusForm.status  = vehicle.value?.STATUS || ''
+  statusError.value  = ''
+  statusSuccess.value = false
+}
+
+async function changeStatus() {
+  statusError.value   = ''
+  statusSuccess.value = false
+  if (!statusForm.status) { statusError.value = 'Please select a status'; return }
+  statusSaving.value = true
+  try {
+    await $api(`/api/vehicles/${route.params.id}/status`, {
+      method: 'POST',
+      body: { status: statusForm.status },
+    })
+    statusSuccess.value = true
+    fetchVehicle()
+    setTimeout(() => { statusSuccess.value = false }, 3000)
+  } catch (e) {
+    statusError.value = e?.data?.message || e?.data?.errors?.status?.[0] || 'Failed to update status'
+  } finally {
+    statusSaving.value = false
   }
 }
 
@@ -543,6 +578,61 @@ function isExpiringSoon(dateStr) {
                 >Cancel</button>
               </template>
             </div>
+          </div>
+
+          <!-- Vehicle Status (ADMIN / CHECKER / SUPER_ADMIN) -->
+          <div v-if="isAdminRole" class="bg-white rounded-xl shadow-sm p-5">
+            <p class="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-4">Vehicle Status</p>
+
+            <!-- Current status display -->
+            <div class="flex items-center gap-2 mb-3">
+              <span class="w-2 h-2 rounded-full flex-shrink-0"
+                :style="`background:${{AVAILABLE:'#10B981',IN_USE:'#3B82F6',MAINTENANCE:'#EAB308',LEASE_EXPIRED:'#EF4444'}[vehicle.STATUS] || '#9CA3AF'}`"
+              ></span>
+              <span class="text-sm font-semibold text-gray-800">
+                {{ { AVAILABLE: 'Available', IN_USE: 'In Use', MAINTENANCE: 'Maintenance', LEASE_EXPIRED: 'Lease Expired' }[vehicle.STATUS] || vehicle.STATUS || '—' }}
+              </span>
+              <span class="text-xs text-gray-400">current</span>
+            </div>
+
+            <!-- Status selector -->
+            <div class="mb-3">
+              <label class="block text-xs text-gray-500 mb-1">Change to</label>
+              <select
+                v-model="statusForm.status"
+                class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-300 bg-white"
+              >
+                <option value="" disabled>— Select status —</option>
+                <option
+                  v-for="s in VEHICLE_STATUSES"
+                  :key="s"
+                  :value="s"
+                  :disabled="s === vehicle.STATUS"
+                >
+                  {{ { AVAILABLE: 'Available', IN_USE: 'In Use', MAINTENANCE: 'Maintenance', LEASE_EXPIRED: 'Lease Expired' }[s] }}
+                  {{ s === vehicle.STATUS ? '(current)' : '' }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Error / Success -->
+            <div v-if="statusError" class="mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <p class="text-xs text-red-600">{{ statusError }}</p>
+            </div>
+            <div v-if="statusSuccess" class="mb-3 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#10B981" stroke-width="2.5" stroke-linecap="round"/></svg>
+              <p class="text-xs text-green-700 font-medium">Status updated successfully</p>
+            </div>
+
+            <button
+              :disabled="statusSaving || !statusForm.status || statusForm.status === vehicle.STATUS"
+              class="w-full py-2 rounded-lg text-xs font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style="background:linear-gradient(135deg,#7C3AED,#6D28D9);"
+              @click="changeStatus"
+            >
+              <span v-if="statusSaving">Updating…</span>
+              <span v-else>Update Status</span>
+            </button>
           </div>
 
           <!-- Meta -->

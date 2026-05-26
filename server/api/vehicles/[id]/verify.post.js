@@ -5,7 +5,7 @@
  */
 import { execute, query } from '../../../utils/db.js'
 
-const ALLOWED_ROLES = ['CHECKER', 'SUPER_ADMIN']
+const ALLOWED_ROLES = ['CHECKER', 'ADMIN', 'SUPER_ADMIN']
 
 export default defineEventHandler(async (event) => {
   const role = event.context.staff?.role

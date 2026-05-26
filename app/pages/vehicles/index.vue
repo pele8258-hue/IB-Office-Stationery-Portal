@@ -1,5 +1,6 @@
 <script setup>
 definePageMeta({ middleware: 'auth' })
+import bgVientiane from '~/assets/images/backgrounds/vientiane_capital_pastel_dream_20260430_085013 1.png'
 
 const { $api } = useNuxtApp()
 const authStore = useAuthStore()
@@ -199,15 +200,102 @@ function resetBulk() {
   bulkError.value   = ''
 }
 
+// ── Verification ──────────────────────────────────────────────────────────────
+const canVerify        = computed(() => ['ADMIN', 'SUPER_ADMIN', 'CHECKER'].includes(authStore.user?.role_code))
+const verifyVehicles   = ref([])
+const verifyLoading    = ref(false)
+const verifyError      = ref('')
+const pendingCount     = ref(0)
+const verifySaving     = ref(false)
+const verifyActionErr  = ref('')
+const rejectTarget     = ref(null) // { id, plateNumber, reason }
+
+// Vehicle detail popup
+const viewDetail       = ref(null)
+const viewLoading      = ref(false)
+
+async function openView(id) {
+  viewDetail.value  = null
+  viewLoading.value = true
+  try {
+    const res = await $api(`/api/vehicles/${id}`)
+    viewDetail.value = res.data
+  } finally {
+    viewLoading.value = false
+  }
+}
+function closeView() { viewDetail.value = null; viewLoading.value = false }
+
+function isDocExpired(val)     { return val && new Date(val) < new Date() }
+function isDocExpiringSoon(val) {
+  if (!val) return false
+  const d = new Date(val), soon = new Date()
+  soon.setDate(soon.getDate() + 60)
+  return d > new Date() && d <= soon
+}
+function fmtDate(val) {
+  if (!val) return '—'
+  return new Date(val).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+async function fetchPending() {
+  verifyLoading.value = true
+  verifyError.value   = ''
+  try {
+    const res = await $api('/api/vehicles?verify_status=PENDING&limit=200')
+    verifyVehicles.value = res.data || []
+    pendingCount.value   = res.pagination?.total_data || 0
+  } catch (e) {
+    verifyError.value = e?.data?.message || 'Failed to load pending vehicles'
+  } finally {
+    verifyLoading.value = false
+  }
+}
+
+function openRejectModal(v) {
+  rejectTarget.value  = { id: v.ID, plateNumber: v.PLATE_NUMBER, reason: '' }
+  verifyActionErr.value = ''
+}
+
+async function doVerify(id, action) {
+  const reason = rejectTarget.value?.reason || ''
+  if (action === 'REJECTED' && !reason.trim()) {
+    verifyActionErr.value = 'Rejection reason is required'
+    return
+  }
+  verifySaving.value    = true
+  verifyActionErr.value = ''
+  try {
+    await $api(`/api/vehicles/${id}/verify`, {
+      method: 'POST',
+      body: { action, reject_reason: reason },
+    })
+    verifyVehicles.value = verifyVehicles.value.filter(v => v.ID !== id)
+    pendingCount.value   = Math.max(0, pendingCount.value - 1)
+    rejectTarget.value   = null
+    fetchVehicles()
+  } catch (e) {
+    verifyActionErr.value = e?.data?.message || 'Action failed'
+  } finally {
+    verifySaving.value = false
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 onMounted(() => {
   fetchVehicles()
   loadBranches()
+  if (canVerify.value) fetchPending()
 })
 </script>
 
 <template>
-  <div>
+  <div class="-m-4 md:-m-6 relative min-h-screen">
+    <div
+      class="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20 pointer-events-none"
+      :style="{ backgroundImage: `url('${bgVientiane}')` }"
+    ></div>
+    <div class="relative p-4 md:p-6">
     <!-- Page header -->
     <div class="mb-6">
       <h1 class="text-xl font-bold text-gray-800">Vehicle Management</h1>
@@ -229,6 +317,27 @@ onMounted(() => {
             <circle cx="17.5" cy="19" r="2" :fill="activeTab==='list'?'#E9D5FF':'#D1D5DB'"/>
           </svg>
           Vehicle List
+        </span>
+      </button>
+      <!-- Verification tab — only for ADMIN / SUPER_ADMIN / CHECKER -->
+      <button
+        v-if="canVerify"
+        class="px-5 py-2 rounded-lg text-sm font-medium transition-all"
+        :class="activeTab === 'verify' ? 'text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+        :style="activeTab === 'verify' ? 'background:linear-gradient(135deg,#F59E0B,#D97706);' : ''"
+        @click="activeTab = 'verify'; fetchPending()"
+      >
+        <span class="flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" :stroke="activeTab==='verify'?'#fff':'#9CA3AF'" stroke-width="1.8" fill="none"/>
+            <path d="M9 12l2 2 4-4" :stroke="activeTab==='verify'?'#fff':'#9CA3AF'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Verification
+          <span
+            v-if="pendingCount > 0"
+            class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-bold rounded-full"
+            :class="activeTab === 'verify' ? 'bg-white/30 text-white' : 'bg-red-500 text-white'"
+          >{{ pendingCount }}</span>
         </span>
       </button>
       <button
@@ -829,7 +938,350 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- ===== VERIFICATION ===== -->
+    <div v-else-if="activeTab === 'verify'" key="verify">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-semibold text-gray-700">Pending Approval</h2>
+          <p class="text-xs text-gray-400 mt-0.5">Review and approve or reject vehicles that were just registered</p>
+        </div>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+          {{ pendingCount }} pending
+        </span>
+      </div>
+
+      <p v-if="verifyError" class="text-sm text-red-500 mb-3">{{ verifyError }}</p>
+
+      <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" style="min-width:640px;">
+            <thead>
+              <tr style="background:linear-gradient(135deg,#F59E0B,#D97706);">
+                <th class="text-left px-4 py-3 text-xs font-semibold text-white">#</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-white">Plate</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-white">Brand / Model</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-white hidden md:table-cell">Branch</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-white hidden lg:table-cell">Registered</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-white">Ownership</th>
+                <th class="px-4 py-3 text-xs font-semibold text-white text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="verifyLoading">
+                <td colspan="7" class="text-center py-12 text-gray-400 text-sm">
+                  <div class="flex flex-col items-center gap-2">
+                    <svg class="animate-spin w-6 h-6" style="color:#F59E0B;" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="32" stroke-dashoffset="12"/>
+                    </svg>
+                    Loading...
+                  </div>
+                </td>
+              </tr>
+              <tr v-else-if="!verifyVehicles.length">
+                <td colspan="7" class="text-center py-16 text-gray-400 text-sm">
+                  <div class="flex flex-col items-center gap-3">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="#D1D5DB" stroke-width="1.5" fill="none"/>
+                      <path d="M9 12l2 2 4-4" stroke="#D1D5DB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <p>No pending vehicles — all caught up!</p>
+                  </div>
+                </td>
+              </tr>
+              <template v-for="(v, idx) in verifyVehicles" v-else :key="v.ID">
+                <tr class="border-t border-gray-50 hover:bg-amber-50 transition-colors">
+                  <td class="px-4 py-3 text-gray-400 text-xs">{{ idx + 1 }}</td>
+                  <td class="px-4 py-3">
+                    <span class="font-mono font-semibold text-amber-700 text-xs bg-amber-50 px-2 py-0.5 rounded">{{ v.PLATE_NUMBER }}</span>
+                  </td>
+                  <td class="px-4 py-3">
+                    <p class="font-medium text-gray-700">{{ v.BRAND || '—' }} {{ v.MODEL || '' }}</p>
+                    <p class="text-xs text-gray-400">{{ v.COLOR || '' }}{{ v.YEAR ? ' · ' + v.YEAR : '' }}</p>
+                  </td>
+                  <td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{{ v.BRANCH_CODE || '—' }}</td>
+                  <td class="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">
+                    {{ v.CREATED_AT ? new Date(v.CREATED_AT).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' }}
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                      :class="v.OWNERSHIP_TYPE === 'LEASE' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'">
+                      {{ v.OWNERSHIP_TYPE || 'OWN' }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3">
+                    <div class="flex items-center justify-end gap-2">
+                      <button
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
+                        @click="openView(v.ID)"
+                      >View</button>
+                      <button
+                        :disabled="verifySaving"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all disabled:opacity-50"
+                        style="background:linear-gradient(135deg,#10B981,#059669);"
+                        @click="rejectTarget = null; doVerify(v.ID, 'APPROVED')"
+                      >Approve</button>
+                      <button
+                        :disabled="verifySaving"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all disabled:opacity-50"
+                        style="background:linear-gradient(135deg,#EF4444,#DC2626);"
+                        @click="openRejectModal(v)"
+                      >Reject</button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     </Transition>
+
+    <!-- Vehicle detail popup -->
+    <Teleport to="body">
+      <Transition name="tab-fade">
+        <div
+          v-if="viewDetail || viewLoading"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style="background:rgba(0,0,0,0.5);"
+          @click.self="closeView"
+        >
+          <!-- Loading spinner -->
+          <div v-if="viewLoading" class="bg-white rounded-2xl shadow-2xl p-12 flex flex-col items-center gap-3">
+            <svg class="animate-spin w-8 h-8" style="color:#F59E0B;" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="32" stroke-dashoffset="12"/>
+            </svg>
+            <p class="text-sm text-gray-400">Loading vehicle details...</p>
+          </div>
+
+          <!-- Detail card -->
+          <div v-else-if="viewDetail" class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+              <div class="flex items-center gap-3">
+                <span class="font-mono font-bold text-amber-700 bg-amber-50 px-3 py-1 rounded-lg text-sm">{{ viewDetail.PLATE_NUMBER }}</span>
+                <span class="text-xs px-2 py-0.5 rounded-full font-semibold bg-yellow-100 text-yellow-700">PENDING</span>
+              </div>
+              <button
+                class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                @click="closeView"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Scrollable body -->
+            <div class="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+
+              <!-- Vehicle Info -->
+              <div>
+                <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Vehicle Information</p>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Brand / Model</p>
+                    <p class="text-sm font-medium text-gray-700">{{ viewDetail.BRAND || '—' }} {{ viewDetail.MODEL || '' }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Color</p>
+                    <p class="text-sm font-medium text-gray-700">{{ viewDetail.COLOR || '—' }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Year</p>
+                    <p class="text-sm font-medium text-gray-700">{{ viewDetail.YEAR || '—' }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Type</p>
+                    <p class="text-sm font-medium text-gray-700">{{ viewDetail.TYPE || '—' }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Ownership</p>
+                    <p class="text-sm font-medium text-gray-700">{{ viewDetail.OWNERSHIP_TYPE || '—' }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Branch</p>
+                    <p class="text-sm font-medium text-gray-700">{{ viewDetail.BRANCH_CODE || '—' }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Registration Numbers -->
+              <div>
+                <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Registration Numbers</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Engine Number</p>
+                    <p class="text-sm font-mono text-gray-700">{{ viewDetail.ENGINE_NUMBER || '—' }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Frame / Chassis</p>
+                    <p class="text-sm font-mono text-gray-700">{{ viewDetail.FRAME_NUMBER || '—' }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Parking -->
+              <div v-if="viewDetail.PARKING_LOT || viewDetail.PARKING_FLOOR">
+                <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Parking</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Lot</p>
+                    <p class="text-sm font-medium text-gray-700">{{ viewDetail.PARKING_LOT || '—' }}</p>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Floor</p>
+                    <p class="text-sm font-medium text-gray-700">{{ viewDetail.PARKING_FLOOR || '—' }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Owner -->
+              <div v-if="viewDetail.OWNER_NAME || viewDetail.OWNER_EMAIL || viewDetail.OWNER_PHONE">
+                <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">Owner Details</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div v-if="viewDetail.OWNER_NAME" class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Name</p>
+                    <p class="text-sm font-medium text-gray-700">{{ viewDetail.OWNER_NAME }}</p>
+                  </div>
+                  <div v-if="viewDetail.OWNER_EMAIL" class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Email</p>
+                    <p class="text-sm text-gray-700">{{ viewDetail.OWNER_EMAIL }}</p>
+                  </div>
+                  <div v-if="viewDetail.OWNER_PHONE" class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Phone</p>
+                    <p class="text-sm text-gray-700">{{ viewDetail.OWNER_PHONE }}</p>
+                  </div>
+                  <div v-if="viewDetail.OWNER_DOB" class="bg-gray-50 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-400 mb-0.5">Date of Birth</p>
+                    <p class="text-sm text-gray-700">{{ fmtDate(viewDetail.OWNER_DOB) }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Documents -->
+              <div>
+                <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3">
+                  Documents
+                  <span class="text-gray-400 font-normal normal-case ml-1">({{ viewDetail.documents?.length || 0 }} file{{ viewDetail.documents?.length !== 1 ? 's' : '' }})</span>
+                </p>
+                <div v-if="!viewDetail.documents?.length" class="text-xs text-gray-400 py-2">No documents attached</div>
+                <div v-else class="space-y-2">
+                  <div
+                    v-for="doc in viewDetail.documents"
+                    :key="doc.ID"
+                    class="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="flex-shrink-0">
+                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="#6366F1" stroke-width="1.8" stroke-linejoin="round"/>
+                      <polyline points="14 2 14 8 20 8" stroke="#6366F1" stroke-width="1.8" stroke-linejoin="round"/>
+                    </svg>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs font-medium text-gray-700 truncate">{{ doc.DOCUMENT_NAME }}</p>
+                      <p class="text-xs text-gray-400">
+                        Expiry:
+                        <span :class="isDocExpired(doc.EXPIRY_DATE) ? 'text-red-500 font-medium' : isDocExpiringSoon(doc.EXPIRY_DATE) ? 'text-yellow-600 font-medium' : 'text-gray-500'">
+                          {{ fmtDate(doc.EXPIRY_DATE) }}
+                          <span v-if="isDocExpired(doc.EXPIRY_DATE)"> · Expired</span>
+                          <span v-else-if="isDocExpiringSoon(doc.EXPIRY_DATE)"> · Expiring soon</span>
+                        </span>
+                      </p>
+                    </div>
+                    <a
+                      v-if="doc.FILE_PATH"
+                      :href="doc.FILE_PATH"
+                      target="_blank"
+                      class="text-xs text-indigo-500 hover:text-indigo-700 font-medium flex-shrink-0"
+                    >Open</a>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Submitted by -->
+              <p class="text-xs text-gray-400">
+                Registered by <span class="font-medium text-gray-600">{{ viewDetail.CREATED_BY_NAME || '—' }}</span>
+                on {{ fmtDate(viewDetail.CREATED_AT) }}
+              </p>
+            </div>
+
+            <!-- Footer actions -->
+            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
+              <button
+                class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
+                @click="closeView"
+              >Close</button>
+              <button
+                :disabled="verifySaving"
+                class="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50"
+                style="background:linear-gradient(135deg,#EF4444,#DC2626);"
+                @click="closeView(); openRejectModal({ ID: viewDetail.ID, PLATE_NUMBER: viewDetail.PLATE_NUMBER })"
+              >Reject</button>
+              <button
+                :disabled="verifySaving"
+                class="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50"
+                style="background:linear-gradient(135deg,#10B981,#059669); box-shadow:0 4px 14px rgba(16,185,129,0.35);"
+                @click="closeView(); doVerify(viewDetail.ID, 'APPROVED')"
+              >Approve</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Reject reason modal -->
+    <Teleport to="body">
+      <Transition name="tab-fade">
+        <div
+          v-if="rejectTarget"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style="background:rgba(0,0,0,0.5);"
+          @click.self="rejectTarget = null"
+        >
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <p class="font-semibold text-gray-800 text-sm">Reject Vehicle</p>
+                <p class="text-xs text-gray-400 mt-0.5 font-mono">{{ rejectTarget.plateNumber }}</p>
+              </div>
+              <button
+                class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                @click="rejectTarget = null"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="px-6 py-5 space-y-4">
+              <p v-if="verifyActionErr" class="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{{ verifyActionErr }}</p>
+              <div>
+                <label class="block text-xs font-semibold mb-1.5 text-gray-600">Reason for rejection <span class="text-red-400">*</span></label>
+                <textarea
+                  v-model="rejectTarget.reason"
+                  rows="3"
+                  placeholder="e.g. Missing chassis number, plate not legible..."
+                  class="w-full px-3 py-2.5 text-sm rounded-lg border border-gray-200 text-gray-700 placeholder-gray-300 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 transition-all resize-none"
+                />
+              </div>
+            </div>
+            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button
+                class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 transition-all"
+                @click="rejectTarget = null"
+              >Cancel</button>
+              <button
+                :disabled="verifySaving"
+                class="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-60"
+                style="background:linear-gradient(135deg,#EF4444,#DC2626); box-shadow:0 4px 14px rgba(239,68,68,0.35);"
+                @click="doVerify(rejectTarget.id, 'REJECTED')"
+              >{{ verifySaving ? 'Rejecting...' : 'Confirm Reject' }}</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+    </div>
   </div>
 </template>
 
