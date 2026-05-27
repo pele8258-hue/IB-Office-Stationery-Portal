@@ -24,7 +24,7 @@ This file must be updated every time a new API is created, changed, or fixed.
 | 14 | Bookings      | GET    | /api/bookings                                | Yes  | List vehicle requests with pagination, search, status filter |
 | 15 | Bookings      | POST   | /api/bookings                                | Yes  | Create new vehicle request with passengers. Admin can pass requester_id to submit on behalf of another staff. Fires email notification to all active ADMIN/CHECKER/SUPER_ADMIN. |
 | 16 | Bookings      | GET    | /api/bookings/:id                            | Yes  | Get single vehicle request detail (owner or admin only)    |
-| 17 | Bookings      | PUT    | /api/bookings/:id                            | Yes  | Update request status: approve/reject/cancel/dispatch/complete |
+| 17 | Bookings      | PUT    | /api/bookings/:id                            | Yes  | Update request status: approve/reject/cancel/dispatch/complete. Reject → email to requester. Cancel → email to all ADMIN/CHECKER/SUPER_ADMIN. |
 | 18 | Bookings      | POST   | /api/bookings/:id/dispatch                   | Yes  | Record actual departure: actual_time_out, meter_before, photo (APPROVED → IN_USE) |
 | 19 | Bookings      | POST   | /api/bookings/:id/complete                   | Yes  | Record actual return: actual_time_in, meter_after, photo (IN_USE → COMPLETED)     |
 | 20 | Vehicles      | POST   | /api/vehicles/:id/status                     | Yes  | Manually change vehicle status — ADMIN/CHECKER/SUPER_ADMIN only                   |
@@ -615,6 +615,79 @@ SMTP_FROM=Admin SVS <your_email@gmail.com>
 ### Scheduled Task
 The system automatically runs `document:expiry-check` every day at **08:00**
 using Nitro's built-in scheduler (no external cron required).
+
+---
+
+## 17. PUT Booking — Update Request Status
+
+**Module:** Bookings  
+**Method:** PUT  
+**URL:** `/api/bookings/:id`  
+**Auth Required:** Yes (Bearer Token)  
+**File:** `server/api/bookings/[id].put.js`
+
+Handles all status transitions for a vehicle request via the `action` field.
+
+| Action          | From Status         | To Status   | Allowed Roles                        | Email Sent                                                         |
+|-----------------|---------------------|-------------|--------------------------------------|--------------------------------------------------------------------|
+| approve         | PENDING             | APPROVED    | ADMIN / CHECKER / SUPER_ADMIN        | Requester — approval + vehicle details                             |
+| reject          | PENDING             | REJECTED    | ADMIN / CHECKER / SUPER_ADMIN        | **Requester** — rejection reason                                   |
+| cancel          | PENDING / REJECTED  | CANCELLED   | Owner only                           | **All active ADMIN / CHECKER / SUPER_ADMIN** — cancellation notice |
+| resubmit        | REJECTED            | PENDING     | Owner only                           | —                                                                  |
+| dispatch        | APPROVED            | IN_USE      | ADMIN / CHECKER / SUPER_ADMIN        | —                                                                  |
+| complete        | IN_USE              | COMPLETED   | ADMIN / CHECKER / SUPER_ADMIN        | —                                                                  |
+| revert          | APPROVED            | PENDING     | ADMIN / CHECKER / SUPER_ADMIN        | —                                                                  |
+| revert_dispatch | IN_USE              | APPROVED    | ADMIN / CHECKER / SUPER_ADMIN        | —                                                                  |
+| change_vehicle  | APPROVED / IN_USE   | (same)      | ADMIN / SUPER_ADMIN                  | —                                                                  |
+| update_details  | PENDING / REJECTED  | (same)      | Owner or ADMIN                       | —                                                                  |
+
+### Request Body Examples
+
+**Approve:**
+```json
+{ "action": "approve", "vehicle_id": 3 }
+```
+
+**Reject:**
+```json
+{ "action": "reject", "reject_reason": "Vehicle not available for requested time" }
+```
+
+**Cancel:**
+```json
+{ "action": "cancel" }
+```
+
+### Request Fields
+
+| Field         | Type   | Required                    | Description                        |
+|---------------|--------|-----------------------------|------------------------------------|
+| action        | string | Yes                         | One of the actions listed above    |
+| vehicle_id    | number | If approve / change_vehicle | Vehicle to assign                  |
+| reject_reason | string | If reject                   | Reason shown to requester in email |
+
+### Success Response (200)
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Request approvedd successfully",
+  "data": { "id": 5 },
+  "meta": { "updated_by": 1, "updated_at": "2026-05-27T08:00:00.000Z" },
+  "timestamp": "2026-05-27T08:00:00.000Z"
+}
+```
+
+### Error Responses
+- `400` — Invalid ID or unknown action
+- `401` — Not authenticated
+- `403` — Role not allowed for this action
+- `404` — Request not found
+- `422` — Status transition not allowed, or required field missing
+
+### Email Notifications (updated 2026-05-27)
+- **reject** → sends email to the **requester** with rejection reason and request details
+- **cancel** → sends email to all **active ADMIN / CHECKER / SUPER_ADMIN** with cancellation notice
 
 ---
 

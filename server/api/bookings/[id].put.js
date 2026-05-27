@@ -10,7 +10,7 @@
  * complete → IN_USE   → COMPLETED  (admin/checker, records actual_time_in)
  */
 import { execute, query } from '../../utils/db.js'
-import { sendApprovalEmail } from '../../utils/email.js'
+import { sendApprovalEmail, sendCancelEmail, sendRejectEmail } from '../../utils/email.js'
 
 export default defineEventHandler(async (event) => {
   if (!event.context.staff) {
@@ -132,6 +132,39 @@ export default defineEventHandler(async (event) => {
       )
     }
 
+    // Fire-and-forget reject email to requester
+    ;(async () => {
+      try {
+        const [reqRows, rejectorRows] = await Promise.all([
+          query(
+            `SELECT s.name, s.email, vr.request_no, vr.destination, vr.purpose,
+                    vr.requested_time_out, vr.requested_time_in
+             FROM   vehicle_requests vr
+             JOIN   staff s ON s.id = vr.staff_id
+             WHERE  vr.id = :id`,
+            { id }
+          ),
+          query(`SELECT name FROM staff WHERE id = :id`, { id: event.context.staff.id }),
+        ])
+        if (!reqRows.length) return
+        const r = reqRows[0]
+        if (!r.EMAIL) return
+        await sendRejectEmail({
+          to:           r.EMAIL,
+          requestNo:    r.REQUEST_NO,
+          requesterName: r.NAME,
+          destination:  r.DESTINATION,
+          purpose:      r.PURPOSE,
+          timeOut:      r.REQUESTED_TIME_OUT,
+          timeIn:       r.REQUESTED_TIME_IN,
+          rejectReason: body.reject_reason.trim(),
+          rejectedBy:   rejectorRows[0]?.NAME || 'Admin',
+        })
+      } catch (err) {
+        console.error('[email] Failed to send reject notification:', err)
+      }
+    })()
+
   } else if (action === 'update_details') {
     const allowedStatuses = isAdmin
       ? ['PENDING', 'REJECTED', 'APPROVED']
@@ -206,6 +239,53 @@ export default defineEventHandler(async (event) => {
         { vehicle_id: booking.VEHICLE_ID }
       )
     }
+
+    // Fire-and-forget cancel email to all admin/checker/super_admin
+    ;(async () => {
+      try {
+        const [reqRows, adminRows, cancellerRows] = await Promise.all([
+          query(
+            `SELECT s.name, vr.request_no, vr.destination, vr.purpose,
+                    vr.requested_time_out, vr.requested_time_in,
+                    d.name AS dept_name, b.name AS branch_name
+             FROM   vehicle_requests vr
+             JOIN   staff s ON s.id = vr.staff_id
+             LEFT JOIN departments d ON d.id = s.department_id
+             LEFT JOIN branches    b ON b.id = s.branch_id
+             WHERE  vr.id = :id`,
+            { id }
+          ),
+          query(
+            `SELECT s.email
+             FROM   staff s
+             JOIN   roles r ON r.id = s.role_id
+             WHERE  r.code IN ('ADMIN', 'SUPER_ADMIN', 'CHECKER')
+               AND  s.status = 'A'
+               AND  s.email IS NOT NULL`,
+            {}
+          ),
+          query(`SELECT name FROM staff WHERE id = :id`, { id: event.context.staff.id }),
+        ])
+        if (!reqRows.length || !adminRows.length) return
+        const r = reqRows[0]
+        const toEmails = adminRows.map(a => a.EMAIL).filter(Boolean)
+        if (!toEmails.length) return
+        await sendCancelEmail({
+          to:             toEmails.join(','),
+          requestNo:      r.REQUEST_NO,
+          requesterName:  r.NAME,
+          requesterDept:  r.DEPT_NAME,
+          requesterBranch: r.BRANCH_NAME,
+          destination:    r.DESTINATION,
+          purpose:        r.PURPOSE,
+          timeOut:        r.REQUESTED_TIME_OUT,
+          timeIn:         r.REQUESTED_TIME_IN,
+          cancelledBy:    cancellerRows[0]?.NAME || 'Requester',
+        })
+      } catch (err) {
+        console.error('[email] Failed to send cancel notification:', err)
+      }
+    })()
 
   } else if (action === 'change_vehicle') {
     if (!isAdmin) throw createError({ statusCode: 403, data: { success: false, message: 'Permission denied' } })

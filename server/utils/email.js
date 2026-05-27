@@ -480,6 +480,266 @@ export async function sendNewRequestEmail({ to, requestNo, requesterName, reques
   })
 }
 
+function buildCancelHtml({ requestNo, requesterName, requesterDept, requesterBranch, destination, purpose, timeOut, timeIn, cancelledBy }) {
+  const fmt = (dt) => {
+    if (!dt) return '—'
+    return new Date(dt).toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+  }
+
+  const subLine = (dept, branch) => {
+    const parts = [dept, branch].filter(Boolean)
+    return parts.length ? `<span style="color:#9ca3af;font-size:11px;">${parts.join(' · ')}</span>` : ''
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Request Cancelled</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;max-width:600px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td bgcolor="#5b21b6" background="cid:${BG_CID}" style="background-color:#5b21b6;padding:28px 32px;" align="center">
+            <img src="cid:${LOGO_CID}" alt="Admin Office Services" width="220" style="display:block;max-width:220px;height:auto;margin:0 auto 14px;" />
+            <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;letter-spacing:0.01em;">Admin Office Services</h1>
+            <p style="margin:5px 0 0;color:#ddd6fe;font-size:12px;letter-spacing:0.04em;">VEHICLE MANAGEMENT SYSTEM</p>
+          </td>
+        </tr>
+
+        <!-- Banner -->
+        <tr>
+          <td style="background:#fff7ed;border-left:4px solid #d97706;padding:14px 32px;">
+            <p style="margin:0;color:#d97706;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">REQUEST CANCELLED</p>
+            <p style="margin:5px 0 0;color:#374151;font-size:13px;line-height:1.5;font-weight:600;">Vehicle request <strong>${requestNo}</strong> has been cancelled by the requester.</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:28px 32px;">
+            <p style="margin:0 0 24px;color:#4b5563;font-size:13px;line-height:1.8;">
+              The following vehicle request has been cancelled. No further action is required.
+            </p>
+
+            <!-- Request Info -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+              <tr>
+                <td style="background:#f9fafb;padding:10px 16px;border-bottom:1px solid #e5e7eb;">
+                  <p style="margin:0;color:#374151;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Request Details</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:16px;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;width:38%;vertical-align:top;">Request No.</td>
+                      <td style="padding:5px 0;color:#5b21b6;font-size:13px;font-weight:700;">${requestNo}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;vertical-align:top;">Requested By</td>
+                      <td style="padding:5px 0;color:#111827;font-size:13px;font-weight:600;">
+                        ${requesterName}
+                        ${subLine(requesterDept, requesterBranch) ? `<br>${subLine(requesterDept, requesterBranch)}` : ''}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;vertical-align:top;">Destination</td>
+                      <td style="padding:5px 0;color:#111827;font-size:13px;font-weight:600;">${destination || '—'}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;vertical-align:top;">Purpose</td>
+                      <td style="padding:5px 0;color:#111827;font-size:13px;">${purpose || '—'}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;vertical-align:top;">Departure</td>
+                      <td style="padding:5px 0;color:#111827;font-size:13px;">${fmt(timeOut)}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;vertical-align:top;">Return</td>
+                      <td style="padding:5px 0;color:#111827;font-size:13px;">${fmt(timeIn)}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;vertical-align:top;">Cancelled By</td>
+                      <td style="padding:5px 0;color:#d97706;font-size:13px;font-weight:600;">${cancelledBy}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.7;">Best regards,<br><strong style="color:#374151;">Admin Team</strong></p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td bgcolor="#4c1d95" style="background:radial-gradient(ellipse at 50% 100%,#6d28d9 0%,#4c1d95 100%);padding:16px 32px;">
+            <p style="margin:0;color:#c4b5fd;font-size:11px;text-align:center;">
+              This is an automated notification from Admin Office Services. Please do not reply to this email.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
+export async function sendCancelEmail({ to, requestNo, requesterName, requesterDept, requesterBranch, destination, purpose, timeOut, timeIn, cancelledBy }) {
+  const t = getTransporter()
+  await t.sendMail({
+    from:    process.env.SMTP_FROM || process.env.SMTP_USER,
+    to,
+    subject: `[Cancelled] Request ${requestNo} — ${destination} by ${requesterName}`,
+    html:    buildCancelHtml({ requestNo, requesterName, requesterDept, requesterBranch, destination, purpose, timeOut, timeIn, cancelledBy }),
+    attachments: [
+      { filename: 'logo.png', path: LOGO_FILE, cid: LOGO_CID },
+      { filename: 'bg.png',   path: BG_FILE,   cid: BG_CID  },
+    ],
+  })
+}
+
+function buildRejectHtml({ requestNo, requesterName, destination, purpose, timeOut, timeIn, rejectReason, rejectedBy }) {
+  const fmt = (dt) => {
+    if (!dt) return '—'
+    return new Date(dt).toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Request Rejected</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;max-width:600px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td bgcolor="#5b21b6" background="cid:${BG_CID}" style="background-color:#5b21b6;padding:28px 32px;" align="center">
+            <img src="cid:${LOGO_CID}" alt="Admin Office Services" width="220" style="display:block;max-width:220px;height:auto;margin:0 auto 14px;" />
+            <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;letter-spacing:0.01em;">Admin Office Services</h1>
+            <p style="margin:5px 0 0;color:#ddd6fe;font-size:12px;letter-spacing:0.04em;">VEHICLE MANAGEMENT SYSTEM</p>
+          </td>
+        </tr>
+
+        <!-- Banner -->
+        <tr>
+          <td style="background:#fef2f2;border-left:4px solid #dc2626;padding:14px 32px;">
+            <p style="margin:0;color:#dc2626;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">REQUEST REJECTED</p>
+            <p style="margin:5px 0 0;color:#374151;font-size:13px;line-height:1.5;font-weight:600;">Your vehicle request <strong>${requestNo}</strong> has been reviewed and rejected.</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:28px 32px;">
+            <p style="margin:0 0 6px;color:#111827;font-size:14px;">Dear <strong>${requesterName}</strong>,</p>
+            <p style="margin:0 0 24px;color:#4b5563;font-size:13px;line-height:1.8;">
+              We regret to inform you that your vehicle request has been rejected. You may review the reason below and resubmit after making the necessary adjustments.
+            </p>
+
+            <!-- Reject Reason -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fecaca;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+              <tr>
+                <td style="background:#fef2f2;padding:10px 16px;border-bottom:1px solid #fecaca;">
+                  <p style="margin:0;color:#dc2626;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Rejection Reason</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:16px;">
+                  <p style="margin:0;color:#374151;font-size:13px;line-height:1.7;">${rejectReason}</p>
+                  <p style="margin:10px 0 0;color:#9ca3af;font-size:12px;">Rejected by: <strong style="color:#374151;">${rejectedBy}</strong></p>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Request Info -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+              <tr>
+                <td style="background:#f9fafb;padding:10px 16px;border-bottom:1px solid #e5e7eb;">
+                  <p style="margin:0;color:#374151;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Request Details</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:16px;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;width:38%;vertical-align:top;">Request No.</td>
+                      <td style="padding:5px 0;color:#5b21b6;font-size:13px;font-weight:700;">${requestNo}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;vertical-align:top;">Destination</td>
+                      <td style="padding:5px 0;color:#111827;font-size:13px;font-weight:600;">${destination || '—'}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;vertical-align:top;">Purpose</td>
+                      <td style="padding:5px 0;color:#111827;font-size:13px;">${purpose || '—'}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;vertical-align:top;">Departure</td>
+                      <td style="padding:5px 0;color:#111827;font-size:13px;">${fmt(timeOut)}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:5px 0;color:#6b7280;font-size:13px;vertical-align:top;">Return</td>
+                      <td style="padding:5px 0;color:#111827;font-size:13px;">${fmt(timeIn)}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.7;">Best regards,<br><strong style="color:#374151;">Admin Team</strong></p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td bgcolor="#4c1d95" style="background:radial-gradient(ellipse at 50% 100%,#6d28d9 0%,#4c1d95 100%);padding:16px 32px;">
+            <p style="margin:0;color:#c4b5fd;font-size:11px;text-align:center;">
+              This is an automated notification from Admin Office Services. Please do not reply to this email.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
+
+export async function sendRejectEmail({ to, requestNo, requesterName, destination, purpose, timeOut, timeIn, rejectReason, rejectedBy }) {
+  const t = getTransporter()
+  await t.sendMail({
+    from:    process.env.SMTP_FROM || process.env.SMTP_USER,
+    to,
+    subject: `[Rejected] Your request ${requestNo} has been rejected`,
+    html:    buildRejectHtml({ requestNo, requesterName, destination, purpose, timeOut, timeIn, rejectReason, rejectedBy }),
+    attachments: [
+      { filename: 'logo.png', path: LOGO_FILE, cid: LOGO_CID },
+      { filename: 'bg.png',   path: BG_FILE,   cid: BG_CID  },
+    ],
+  })
+}
+
 export async function sendExpiryEmail({ to, ownerName, ownerEmail, ownerPhone, documentName, plateNumber, brand, model, expiryDate, daysRemaining, notificationType }) {
   const t = getTransporter()
   await t.sendMail({
